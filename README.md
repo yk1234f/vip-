@@ -2,7 +2,9 @@
 
 维护者：**yk1234f**。版本：**3.2.0**。
 
+配合篡改猴使用：https://www.tampermonkey.net/
 安装文件：`vip视频解析线路优选助手.user.js`。这是采用独立名称和 namespace 的修改版，来源与许可证情况见 `SOURCE_NOTICES.md`，改名不能消除上游授权义务。
+https://greasyfork.org/zh-CN/scripts/596803-vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B
 
 ## 界面示例
 
