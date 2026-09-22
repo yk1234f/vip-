@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.3.1
+// @version           3.4.0
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -579,7 +579,7 @@
                 <p class="target-note hint">支持 16:18、16分18秒、16 min 18 sec。</p>
                 <div class="toolbar">
                     <button type="button" data-action="smart">实测全部并择优</button>
-                    <button type="button" data-action="stop-smart" hidden>停止测试</button>
+                    <button type="button" data-action="stop-smart" hidden>停止测试并观看已通过线路</button>
                 </div>
                 <div class="toolbar">
                     <button type="button" data-action="smart-toggle">按时长优选：开</button>
@@ -914,6 +914,7 @@
         if (button.dataset.source) {
             const source = sources.find(s => s.u === button.dataset.source);
             if (!source || isHidden(source)) return;
+            if (smartRun && chooseTestedNow(source)) return;
             stopSmartSelection();
             if (mode === 'embedded') void play(source, true);
             else {
@@ -950,6 +951,11 @@
             case 'smart': void startSmartSelection(); break;
             case 'sort-success': save(PREFIX + 'manual-order', null); render(); break;
             case 'stop-smart':
+                if (smartRun) {
+                    refreshLateTarget(smartRun);
+                    const available = [...smartRun.matches].filter(r=>r.frame.isConnected && probeStates.get(r.source.u)==='match').sort((a,b)=>b.score-a.score);
+                    if (available[0] && chooseTestedNow(available[0].source)) break;
+                }
                 stopSmartSelection(); restorePlayer(); render();
                 message('已停止测试，可手动选线或重新开始。'); break;
             case 'smart-toggle':
@@ -1303,6 +1309,54 @@
         if (activePlayer?.testing || (!activePlayer && originalMediaGuard)) restorePlayer();
         render();
     }
+    function refreshLateTarget(run, supplied = null) {
+        if (run.target || smartRun !== run || run.cancelled) return;
+        const found = supplied || DurationTools.detect(document, run.key) || readTencentDuration(run.key);
+        if (!found && !run.targetFetch && Date.now()-(run.lastTargetFetch || 0)>10000 && /bilibili\.com/.test(new URL(run.key).hostname)) {
+            run.lastTargetFetch=Date.now();run.targetFetch=true;
+            void fetchBilibiliTarget(run.key).then(value=>{
+                run.targetFetch=false;
+                if(value) refreshLateTarget(run,value);
+            });
+        }
+        if (!found?.seconds || found.seconds > 86400) return;
+        run.target = found;
+        targetInput.value = DurationTools.format(found.seconds);
+        targetNote.textContent = `已补读正片时长 ${DurationTools.format(found.seconds)}，正在重新核对候选。`;
+        for (const candidate of run.matches) {
+            if (!candidate.frame.isConnected || candidate === run.retesting) continue;
+            if (DurationTools.classify(candidate.duration,found.seconds) !== 'match') {
+                probeStates.set(candidate.source.u,'failed');
+                probeResults.set(candidate.source.u,'补读正片时长后不匹配，已排除');
+                sendControl(candidate.frame,candidate.token,'abort');
+                candidate.frame.remove(); ownedFrames.delete(candidate.frame);
+            } else {
+                probeResults.set(candidate.source.u,candidate.label.replace('完整时长未验证','补读时长匹配'));
+            }
+        }
+        render();
+    }
+    function chooseTestedNow(source) {
+        const run = smartRun;
+        if (!run || !activePlayer) return false;
+        refreshLateTarget(run);
+        const best = run.matches.find(r=>r.source.u===source.u && r.frame.isConnected && probeStates.get(source.u)==='match');
+        if (!best) return false;
+        run.cancelled=true; smartRun=null; clearInterval(run.holdTimer);
+        for (const cancel of [...run.cancellers]) cancel();
+        for (const other of run.matches) if(other!==best) sendControl(other.frame,other.token,'abort');
+        for (const [url,state] of probeStates) if(['queued','testing','retesting'].includes(state)) {
+            probeStates.set(url,'cancelled');probeResults.set(url,'已提前选择其他线路');
+        }
+        for (const frame of [...ownedFrames]) if(frame!==best.frame) {frame.remove();ownedFrames.delete(frame);}
+        best.frame.id=frameId;best.frame.style.cssText='';
+        activePlayer.frame=best.frame;activePlayer.source=best.source;activePlayer.testing=false;
+        choose(best.source);sendControl(best.frame,best.token,'commit',best);
+        render();
+        box.querySelector('.probe-summary').textContent='已提前选线，其余测试已停止。';
+        message(`正在播放 ${source.n}，已保留播放器和进度。${run.target ? '' : '完整时长未验证。'}`);
+        return true;
+    }
     function probeFrame(source, container) {
         const frame = document.createElement('iframe');
         frame.title = source.n + ' 时长测试';
@@ -1355,13 +1409,14 @@
         if (!player) { smartRun = null; restorePlayer(); render(); message('未找到原播放器，无法启动内嵌选线。'); return; }
         const limit = concurrencySelect.value === 'all' ? candidates.length : Math.max(1, Math.min(6, Number(concurrencySelect.value) || 3));
         run.holdTimer = setInterval(() => {
+            refreshLateTarget(run);
             for (const result of run.matches) if(result !== run.retesting) sendControl(result.frame, result.token, 'hold');
         }, 1000);
         let next = 0;
         let completed = 0;
         const summary = () => {
             const passed = candidates.filter(source=>probeStates.get(source.u)==='match').length;
-            box.querySelector('.probe-summary').innerHTML = `已测 <span class="metric tested">${completed}/${candidates.length}</span> · 通过 <span class="metric passed">${passed}</span> 条${target ? '' : ' · 完整时长未验证'} · 同时 <span class="metric parallel">${run.phase === 'retest' ? 1 : limit}</span> 条 · 加载 <span class="metric timeout">最多${timeoutSelect.value}秒</span>，再实播观察`;
+            box.querySelector('.probe-summary').innerHTML = `已测 <span class="metric tested">${completed}/${candidates.length}</span> · 通过 <span class="metric passed">${passed}</span> 条${run.target ? '' : ' · 完整时长未验证'} · 同时 <span class="metric parallel">${run.phase === 'retest' ? 1 : limit}</span> 条 · 加载 <span class="metric timeout">最多${timeoutSelect.value}秒</span>，再实播观察`;
         };
         async function worker() {
             while (smartRun === run && !run.cancelled && next < candidates.length) {
@@ -1380,7 +1435,7 @@
                 probeResults.set(source.u, result.label);
                 if (result.type === 'match') {
                     run.matches.push({source, ...result});
-                    record(source, !!target);
+                    record(source, !!run.target);
                     sendControl(frame, result.token, 'hold');
                 } else {
                     frame.remove(); ownedFrames.delete(frame);
@@ -1393,15 +1448,21 @@
         await Promise.all(Array.from({length:Math.min(limit, candidates.length)}, worker));
         if (smartRun !== run || run.cancelled) return;
         run.phase = 'retest';
-        const finalists = [...run.matches].sort((a,b)=>b.score-a.score).slice(0,3);
+        refreshLateTarget(run);
+        const finalists = [...run.matches].filter(r=>r.frame.isConnected).sort((a,b)=>b.score-a.score);
         const verified = [];
+        let attempted=0;
         for (const candidate of finalists) {
             if (smartRun !== run || run.cancelled) return;
+            refreshLateTarget(run);
+            if (attempted >= 3 && verified.some(r=>r.frame.isConnected)) break;
+            if (!candidate.frame.isConnected) continue;
+            attempted++;
             run.retesting = candidate;
             probeStates.set(candidate.source.u,'retesting');
             probeResults.set(candidate.source.u,'单路重新计时，独立复测');
             summary();
-            message(`正在依次复测 ${verified.length + 1}/${finalists.length} 个候选；其他候选暂停。`);
+            message(`正在依次复测第 ${attempted}/${finalists.length} 个候选；前三名全失败后继续尝试后续线路。`);
             render();
             // A fresh token clears reporter measurements; held samples cannot
             // satisfy the new observation period.
@@ -1427,9 +1488,9 @@
                 activePlayer.frame = best.frame; activePlayer.source = best.source; activePlayer.testing = false;
                 choose(best.source);
                 sendControl(best.frame, best.token, 'commit', best);
-                save(PREFIX + 'duration-success:' + run.key, {u:best.source.u, target:target?.seconds ?? null, fullDurationVerified:!!target, actual:best.duration, at:Date.now()});
+                save(PREFIX + 'duration-success:' + run.key, {u:best.source.u, target:run.target?.seconds ?? null, fullDurationVerified:!!run.target, actual:best.duration, at:Date.now()});
                 summary(); render();
-                message(`已选 ${best.source.n}：${DurationTools.format(best.duration)}，本轮 ${best.score.toFixed(1)} 分。${target ? '' : '完整时长未验证，可能包含试看；可填写正片时长后重测。'}若无声请点播放器取消静音。`);
+                message(`已选 ${best.source.n}：${DurationTools.format(best.duration)}，本轮 ${best.score.toFixed(1)} 分。${run.target ? '' : '完整时长未验证，可能包含试看；可填写正片时长后重测。'}若无声请点播放器取消静音。`);
             } else {
                 restorePlayer(); render();
                 message(`本轮没有确认到${target ? '时长匹配且' : ''}已播放的线路。可查看检测结果；未知不等于永久失效。`);
