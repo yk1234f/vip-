@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.3.0
+// @version           3.3.1
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -375,8 +375,27 @@
             session = null;
             for (const [video, state] of media) {
                 if (commitId === state.id) {
-                    video.muted = state.muted;
-                    try { video.play()?.catch(() => {}); } catch {}
+                    // The winner must be audible even when the parser starts
+                    // muted or a fresh retest session inherited probe muting.
+                    const enableSound = () => {
+                        video.defaultMuted = false;
+                        video.removeAttribute('muted');
+                        video.muted = false;
+                        if (video.volume === 0) video.volume = 0.5;
+                        return video.play();
+                    };
+                    const offerGesture = () => {
+                        if (!video.isConnected || document.querySelector('[data-vip-enable-sound]')) return;
+                        const button = document.createElement('button');
+                        button.dataset.vipEnableSound = 'true';
+                        button.textContent = '点击开启声音并播放';
+                        button.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:2147483647;background:#166534;color:white;border:2px solid white;border-radius:8px;padding:12px;cursor:pointer;';
+                        button.addEventListener('click', () => {
+                            try { Promise.resolve(enableSound()).then(()=>button.remove(),()=>{button.textContent='请点击播放器开启声音';}); } catch {}
+                        });
+                        (document.body || document.documentElement).append(button);
+                    };
+                    try { Promise.resolve(enableSound()).catch(offerGesture); } catch { offerGesture(); }
                 } else { try { video.pause(); } catch {} }
             }
             media.clear();
