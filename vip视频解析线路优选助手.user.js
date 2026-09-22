@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.5.0
+// @version           3.5.1
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -735,7 +735,7 @@
             button.dataset.source = source.u;
             button.textContent = source.n;
             const s = stat(source);
-            button.title = `${source.n}\n实测成功：${s.count} 次\n${s.last ? '最近成功：' + new Date(s.last).toLocaleString() : '尚无实测成功记录'}\n${source.u}`;
+            button.title = `${source.n}\n${s.last ? '最近成功：' + new Date(s.last).toLocaleString() : '尚无实测成功记录'}\n累计成功次数：${s.count}\n${source.u}`;
             const probeStatus = probeResults.get(source.u);
             if (probeStatus) button.title += '\n本次检测：' + probeStatus;
             button.disabled = isHidden(source);
@@ -750,7 +750,7 @@
             const resultLabel = {match:'通过',failed:'未通过',testing:'检测中',retesting:'复测中',unknown:'无法确认',cancelled:'已取消',queued:'待测',idle:'未测试'}[state];
             badge.textContent = resultLabel;
             if (probeStatus) badge.textContent += ' · ' + probeStatus;
-            badge.textContent += ' · 累计可播放 ' + s.count + ' · 时长匹配 ' + s.full;
+            badge.textContent += ' · 时长匹配 ' + s.full;
             if (probeStatus) badge.title = '本轮：' + probeStatus;
             button.appendChild(badge);
             const h = health(source);
@@ -763,6 +763,10 @@
             last.style.display='block';
             last.textContent = '最近成功：' + (s.last ? new Date(s.last).toLocaleString() : '暂无');
             healthInfo.appendChild(last);
+            const total = document.createElement('span');
+            total.style.display = 'block';
+            total.textContent = '累计成功次数：' + s.count;
+            healthInfo.appendChild(total);
             healthInfo.title = '最近30天内最多20轮已结束检测；复测覆盖本轮结果，取消不新增记录。超时和无法确认也计入分母，不代表永久失效。最近成功为已通过实播的时间。';
             button.appendChild(healthInfo);
             row.appendChild(button);
