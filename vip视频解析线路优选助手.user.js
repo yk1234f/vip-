@@ -49,7 +49,9 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.2.1
+// @version           3.3.0
+// @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
+// @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
 // @run-at            document-start
 // @grant             GM_xmlhttpRequest
@@ -204,6 +206,36 @@
             return Math.max(0, Math.min(100, ratio * 75 + Math.min(buffer, 10) * 1.5 + 10 - Math.min(startup, 25) * .4 - Math.min(stalls, 10) * 3 - dropRatio * 25));
         }
         return {parse, input, format, tolerance, classify, detect, score};
+    })();
+
+    const IdentityTools = (() => {
+        const normalize = value => typeof value === 'string'
+            ? value.normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '') : '';
+        function read(doc) {
+            const items = [];
+            function visit(value, depth = 0) {
+                if (!value || depth > 8) return;
+                if (Array.isArray(value)) return value.slice(0, 30).forEach(v => visit(v, depth + 1));
+                if (typeof value !== 'object') return;
+                if (['VideoObject', 'Movie', 'TVEpisode'].includes(value['@type']) && typeof value.name === 'string')
+                    items.push({title:value.name.slice(0,200), year:String(value.datePublished || '').match(/^\d{4}/)?.[0] || '', episode:String(value.episodeNumber || '')});
+                if (value['@graph']) visit(value['@graph'], depth + 1);
+                if (value.mainEntity) visit(value.mainEntity, depth + 1);
+            }
+            for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) {
+                try { visit(JSON.parse(el.textContent)); } catch {}
+            }
+            // Ambiguous structured titles are not sufficient to identify a film.
+            return items.length === 1 ? items[0] : null;
+        }
+        function compare(expected, actual) {
+            if (!expected?.title || !actual?.title) return 'unknown';
+            if (normalize(expected.title) !== normalize(actual.title)) return 'conflict';
+            if (expected.year && actual.year && expected.year !== actual.year) return 'conflict';
+            if (expected.episode && actual.episode && expected.episode !== actual.episode) return 'conflict';
+            return 'match';
+        }
+        return {read, compare};
     })();
 
     // Cross-origin player hosts are often created dynamically. On unrelated top
@@ -388,7 +420,7 @@
                 let dropRatio = 0;
                 try { const q = video.getVideoPlaybackQuality?.(); if (q?.totalVideoFrames) dropRatio = q.droppedVideoFrames / q.totalVideoFrames; } catch {}
                 session.source.postMessage({channel:DURATION_CHANNEL, kind:'sample', token:session.token,
-                    mediaId:state.id, duration, progressed:state.progressed,
+                    mediaId:state.id, duration, identity:IdentityTools.read(document), progressed:state.progressed,
                     observed:state.startedAt === null ? 0 : (now - state.startedAt) / 1000,
                     startup:state.startup, stalls:state.stalls, buffer, dropRatio,
                     readyState:Number.isInteger(video.readyState)?video.readyState:(state.progressed>0?2:0), error:video.error?.code || 0}, session.origin);
@@ -470,6 +502,7 @@
         const s = read(countKey(source), {});
         return {
             count: Number.isSafeInteger(s?.count) && s.count >= 0 ? s.count : 0,
+            full: Number.isSafeInteger(s?.full) && s.full >= 0 ? s.full : 0,
             last: Number.isFinite(s?.last) && s.last >= 0 ? s.last : 0
         };
     }
@@ -483,13 +516,14 @@
             .sort((a, b) => rank(a.source) - rank(b.source) || b.count - a.count || b.last - a.last || a.index - b.index)
             .map(row => row.source);
     }
-    function record(source) {
+    function record(source, full = false) {
         const previous = stat(source);
-        save(countKey(source), {count: Math.min(Number.MAX_SAFE_INTEGER, previous.count + 1), last: Date.now()});
+        save(countKey(source), {count: Math.min(Number.MAX_SAFE_INTEGER, previous.count + 1), full: Math.min(Number.MAX_SAFE_INTEGER, previous.full + Number(full)), last: Date.now()});
     }
     let autoOn = yes(read(SITE + 'auto', read('auto_player_key' + location.host, false)));
     const oldIndex = Number(read('auto_player_value_' + location.host, 0));
-    const legacySource = Number.isInteger(oldIndex) ? apis[oldIndex] : null;
+    const legacyNames = ['虾米','M1907','2s0','IK9','777','789解析','爱豆','芒果','七哥','playerjy','咸鱼TV','973解析','IK',null,'ckplayer','playm3u8','夜幕','盘古','8090','芒果TV1','FF','HM','LZ','七七云解析','臻享视听'];
+    const legacySource = Number.isInteger(oldIndex) ? sources.find(source => source.n === legacyNames[oldIndex]) : null;
     let selected = read(SITE + 'selected', legacySource?.u || '');
     let mode = read(SITE + 'mode', 'embedded') === 'tab' ? 'tab' : 'embedded';
     let managing = false;
@@ -499,6 +533,7 @@
     let smartRun = null;
     let smartOn = read(SITE + 'smart', true) !== false;
     const probeResults = new Map();
+    const probeStates = new Map();
     let generation = 0;
     let cancelWait = null;
     let statusTimer = null;
@@ -627,18 +662,16 @@
             button.disabled = isHidden(source);
             button.setAttribute('aria-pressed', String(source.u === selected));
             const badge = document.createElement('span');
-            const statusClass = probeStatus && /通过/.test(probeStatus) ? 'pass'
-                : (smartRun ? 'testing' : (probeStatus ? 'fail' : 'idle'));
+            const state = probeStates.get(source.u) || 'idle';
+            const statusClass = {match:'pass',failed:'fail',testing:'testing',retesting:'testing'}[state] || 'idle';
             badge.className = 'counter ' + statusClass;
             // The first label describes this run. Historical counters are
             // deliberately secondary so they cannot be mistaken for a live
             // playback result.
-            const resultLabel = probeStatus
-                ? (/通过/.test(probeStatus) ? '通过' : (smartRun ? '检测中' : '失败'))
-                : (smartRun ? '检测中' : '未测试');
+            const resultLabel = {match:'通过',failed:'未通过',testing:'检测中',retesting:'复测中',unknown:'无法确认',cancelled:'已取消',queued:'待测',idle:'未测试'}[state];
             badge.textContent = resultLabel;
             if (probeStatus) badge.textContent += ' · ' + probeStatus;
-            badge.textContent += ' · 累计通过 ' + s.count;
+            badge.textContent += ' · 累计可播放 ' + s.count + ' · 时长匹配 ' + s.full;
             if (probeStatus) badge.title = '本轮：' + probeStatus;
             button.appendChild(badge);
             row.appendChild(button);
@@ -925,7 +958,7 @@
         if (!box.isConnected) document.body.appendChild(box);
         if (location.href !== lastUrl) {
             lastUrl = location.href;
-            stopSmartSelection(); probeResults.clear(); clearTargetDisplay();
+            stopSmartSelection(); probeResults.clear(); probeStates.clear(); clearTargetDisplay();
             stopPending(); restorePlayer(); runAuto();
         } else if (activePlayer && !activePlayer.testing && !activePlayer.frame.isConnected) {
             const source = activePlayer.source;
@@ -1160,6 +1193,8 @@
             const finish = result => {
                 if (finished) return;
                 finished = true; cleanup();
+                probeStates.set(source.u, result.type);
+                probeResults.set(source.u, result.label);
                 if (result.type !== 'match') sendControl(frame, token, 'abort');
                 resolve({...result, frame, token});
             };
@@ -1178,6 +1213,10 @@
                 if (typeof data.mediaId !== 'string' || data.mediaId.length > 64) return;
                 if (!Number.isInteger(data.readyState) || data.readyState < 0 || data.readyState > 4) return;
                 received = true;
+                const identity = IdentityTools.compare(run.identity, data.identity);
+                if (identity === 'conflict') {
+                    finish({type:'failed',label:'片名、年份或集数冲突，已排除'}); return;
+                }
                 if (data.error) playerError = true;
                 if (typeof data.duration !== 'number' || !Number.isFinite(data.duration) || data.duration <= 0) {
                     probeResults.set(source.u,'等待时长（0:00 不是失败）');return;
@@ -1198,7 +1237,7 @@
                             dropRatio:Number.isFinite(data.dropRatio) ? Math.max(0, Math.min(1, data.dropRatio)) : 0
                         };
                         const score = DurationTools.score(metrics);
-                        finish({type:'match', label:`实播通过 ${score.toFixed(1)} 分${run.target ? '' : ' · 完整时长未验证'}`, score, metrics, duration:data.duration, reporter:event.source, mediaId:data.mediaId});
+                        finish({type:'match', label:`${run.phase === 'retest' ? '复测' : '实播'}通过 ${score.toFixed(1)} 分${run.target ? '' : ' · 完整时长未验证'} · ${identity === 'match' ? '片名元数据匹配' : '内容未核验'}`, score, metrics, duration:data.duration, reporter:event.source, mediaId:data.mediaId});
                     }
                 } else probeResults.set(source.u,`暂读 ${DurationTools.format(data.duration)} · 等待正片`);
             };
@@ -1217,7 +1256,7 @@
                     const label = hasMatchingMetadata ? (run.target ? '时长匹配，未能自动实播' : '已读时长，未确认实播') :
                         lastDuration ? `${kind==='short'?'偏短':'偏长'} ${DurationTools.format(lastDuration)}` :
                         playerError ? '加载报错，未确认' : received ? '仍未读到有效时长' : '检测器未响应/页面未加载';
-                    finish({type:'unknown',label});
+                    finish({type:run.target && lastDuration && !hasMatchingMetadata ? 'failed' : 'unknown',label});
                 }
                 if(Date.now()-latestRender>1200){latestRender=Date.now();render();}
             }, 500);
@@ -1238,6 +1277,9 @@
         clearInterval(run.holdTimer);
         for (const result of run.matches || []) sendControl(result.frame, result.token, 'abort');
         for (const cancel of [...run.cancellers]) cancel();
+        for (const [url, state] of probeStates) if (['queued','testing','retesting','match'].includes(state)) {
+            probeStates.set(url,'cancelled'); probeResults.set(url,'本轮已停止');
+        }
         stopPending();
         if (activePlayer?.testing || (!activePlayer && originalMediaGuard)) restorePlayer();
         render();
@@ -1268,7 +1310,10 @@
     async function startSmartSelection() {
         stopSmartSelection();
         const run = {url:location.href, key:videoPageUrl(), cancellers:new Set(), cancelled:false, matches:[], holdTimer:null};
-        smartRun = run; probeResults.clear(); render(); openPanel(true);
+        run.identity = IdentityTools.read(document);
+        smartRun = run; probeResults.clear(); probeStates.clear();
+        for (const source of ranked()) probeStates.set(source.u,'queued');
+        render(); openPanel(true);
         if(!originalMediaGuard) originalMediaGuard=guardOriginalMedia();
         message('正在获取正片总时长…');
         targetRequest = null;
@@ -1291,12 +1336,13 @@
         if (!player) { smartRun = null; restorePlayer(); render(); message('未找到原播放器，无法启动内嵌选线。'); return; }
         const limit = concurrencySelect.value === 'all' ? candidates.length : Math.max(1, Math.min(6, Number(concurrencySelect.value) || 3));
         run.holdTimer = setInterval(() => {
-            for (const result of run.matches) sendControl(result.frame, result.token, 'hold');
+            for (const result of run.matches) if(result !== run.retesting) sendControl(result.frame, result.token, 'hold');
         }, 1000);
         let next = 0;
         let completed = 0;
         const summary = () => {
-            box.querySelector('.probe-summary').innerHTML = `已测 <span class="metric tested">${completed}/${candidates.length}</span> · 通过 <span class="metric passed">${run.matches.length}</span> 条${target ? '' : ' · 完整时长未验证'} · 同时 <span class="metric parallel">${limit}</span> 条 · 加载 <span class="metric timeout">最多${timeoutSelect.value}秒</span>，再实播观察`;
+            const passed = candidates.filter(source=>probeStates.get(source.u)==='match').length;
+            box.querySelector('.probe-summary').innerHTML = `已测 <span class="metric tested">${completed}/${candidates.length}</span> · 通过 <span class="metric passed">${passed}</span> 条${target ? '' : ' · 完整时长未验证'} · 同时 <span class="metric parallel">${run.phase === 'retest' ? 1 : limit}</span> 条 · 加载 <span class="metric timeout">最多${timeoutSelect.value}秒</span>，再实播观察`;
         };
         async function worker() {
             while (smartRun === run && !run.cancelled && next < candidates.length) {
@@ -1304,6 +1350,7 @@
                 const source = candidates[index];
                 const frame = index === 0 ? player.frame : probeFrame(source, player.container);
                 layoutProbeFrames();
+                probeStates.set(source.u,'testing');
                 probeResults.set(source.u, '测试中'); summary(); render();
                 const result = await inspectCandidate(frame, source, run);
                 if (smartRun !== run || run.cancelled) {
@@ -1314,7 +1361,7 @@
                 probeResults.set(source.u, result.label);
                 if (result.type === 'match') {
                     run.matches.push({source, ...result});
-                    record(source);
+                    record(source, !!target);
                     sendControl(frame, result.token, 'hold');
                 } else {
                     frame.remove(); ownedFrames.delete(frame);
@@ -1325,10 +1372,33 @@
         }
         message(`正在同时测试 ${limit} 条线路，全部测完后选择${target ? '时长匹配且' : ''}实测最流畅的一条。${target ? '' : '完整时长未验证。'}`);
         await Promise.all(Array.from({length:Math.min(limit, candidates.length)}, worker));
+        if (smartRun !== run || run.cancelled) return;
+        run.phase = 'retest';
+        const finalists = [...run.matches].sort((a,b)=>b.score-a.score).slice(0,3);
+        const verified = [];
+        for (const candidate of finalists) {
+            if (smartRun !== run || run.cancelled) return;
+            run.retesting = candidate;
+            probeStates.set(candidate.source.u,'retesting');
+            probeResults.set(candidate.source.u,'单路重新计时，独立复测');
+            summary();
+            message(`正在依次复测 ${verified.length + 1}/${finalists.length} 个候选；其他候选暂停。`);
+            render();
+            // A fresh token clears reporter measurements; held samples cannot
+            // satisfy the new observation period.
+            const result = await inspectCandidate(candidate.frame,candidate.source,run);
+            if (smartRun !== run || run.cancelled) return;
+            Object.assign(candidate,result);
+            run.retesting = null;
+            if(result.type === 'match') {
+                verified.push(candidate); sendControl(candidate.frame,candidate.token,'hold');
+            } else { candidate.frame.remove(); ownedFrames.delete(candidate.frame); }
+            summary(); render();
+        }
         if (smartRun === run) {
             clearInterval(run.holdTimer);
             smartRun = null;
-            const best = run.matches.filter(result => result.frame.isConnected).sort((a, b) => b.score - a.score || a.metrics.startup - b.metrics.startup)[0];
+            const best = verified.filter(result => result.frame.isConnected).sort((a, b) => b.score - a.score || a.metrics.startup - b.metrics.startup)[0];
             if (best && activePlayer) {
                 for (const result of run.matches) if (result !== best) sendControl(result.frame, result.token, 'abort');
                 for (const frame of [...ownedFrames]) if (frame !== best.frame) { frame.remove(); ownedFrames.delete(frame); }
