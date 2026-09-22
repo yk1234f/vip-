@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.5.1
+// @version           3.5.2
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -563,6 +563,7 @@
     const countKey = source => PREFIX + 'success-stats-v3:' + source.u;
     const hiddenKey = source => PREFIX + 'hidden:' + source.u;
     const healthKey = source => PREFIX + 'route-health-v1:' + source.u;
+    const healthBackupKey = PREFIX + 'health-reset-backup-v1';
     const health = source => HealthTools.summarize(read(healthKey(source),{}));
     function recordHealth(source, run, outcome) {
         if (!run?.healthId || !['pass','fail','timeout','unknown'].includes(outcome)) return;
@@ -651,6 +652,8 @@
                 <button type="button" data-action="manage">管理线路</button>
                 <button type="button" data-action="sort-success">按近期健康排序</button>
                 <button type="button" data-action="restore-sources" hidden>恢复全部隐藏线路</button>
+                <button type="button" data-action="reset-health" hidden title="清空所有现有线路（含隐藏线路）的近期记录，保留累计次数、最近成功时间及手动顺序">重新计算健康记录</button>
+                <button type="button" data-action="undo-health-reset" hidden>恢复上次健康记录</button>
             </div>
             <p class="notice">第三方线路会收到当前视频网址。自动播放仅用于内嵌模式。</p>
             <p class="status" role="status" aria-live="polite"></p>
@@ -787,6 +790,10 @@
         autoButton.setAttribute('aria-pressed', String(autoOn));
         box.querySelector('[data-action="manage"]').textContent = managing ? '完成管理' : '管理线路';
         box.querySelector('[data-action="restore-sources"]').hidden = !managing;
+        box.querySelector('[data-action="reset-health"]').hidden = !managing;
+        box.querySelector('[data-action="reset-health"]').disabled = !!smartRun;
+        box.querySelector('[data-action="undo-health-reset"]').hidden = !managing || !read(healthBackupKey,null);
+        box.querySelector('[data-action="undo-health-reset"]').disabled = !!smartRun;
         box.querySelector('[data-action="smart-toggle"]').textContent = '按时长优选：' + (smartOn ? '开' : '关');
         box.querySelector('[data-action="stop-smart"]').hidden = !smartRun;
         box.querySelector('[data-action="smart"]').disabled = !!smartRun;
@@ -1047,6 +1054,32 @@
                 autoOn = false; save(SITE + 'auto', false); render();
                 message('已恢复原播放器并关闭自动播放。'); break;
             case 'manage': managing = !managing; render(); break;
+            case 'reset-health': {
+                if (smartRun) {message('请先结束测试，再重新计算健康记录。');break;}
+                const backup = sources.map(source=>({u:source.u,events:health(source).events}));
+                if (!save(healthBackupKey,backup)) break;
+                let ok=true;
+                for (const source of sources) if(!save(healthKey(source),{events:[]})) ok=false;
+                render();
+                message(ok ? '健康记录已重新开始：近期成功率为暂无样本，连续超时为0；累计成功次数、最近成功时间和手动顺序保留。' : '部分记录未能清空，可恢复上次健康记录后重试。');
+                break;
+            }
+            case 'undo-health-reset': {
+                if (smartRun) {message('请先结束测试，再恢复健康记录。');break;}
+                const backup=read(healthBackupKey,null);
+                if(!Array.isArray(backup)) break;
+                let ok=true;
+                for(const source of sources) {
+                    const old=backup.find(item=>item?.u===source.u);
+                    if(!old) continue;
+                    const events=[...(Array.isArray(old.events)?old.events:[]),...health(source).events];
+                    // Keep post-reset results too; normal age/count limits still apply.
+                    if(!save(healthKey(source),{events:HealthTools.summarize({events}).events})) ok=false;
+                }
+                if(ok) save(healthBackupKey,null);
+                render();message(ok?'已恢复上次健康记录，并保留重置后的新检测结果。':'部分记录恢复失败，可重试。');
+                break;
+            }
             case 'restore-sources':
                 for (const source of sources) save(hiddenKey(source), false);
                 render(); message('全部线路已恢复。'); break;
