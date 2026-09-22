@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.4.0
+// @version           3.5.0
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -236,6 +236,51 @@
             return 'match';
         }
         return {read, compare};
+    })();
+
+    const HealthTools = (() => {
+        const DAY = 86400000;
+        const outcomes = new Set(['pass', 'fail', 'timeout', 'unknown']);
+        function valid(event, now) {
+            return event && typeof event.id === 'string' && event.id.trim().length > 0 && event.id.length <= 128
+                && Number.isFinite(event.at) && event.at > 0 && event.at <= now
+                && event.at >= now - 30 * DAY && outcomes.has(event.outcome);
+        }
+        function eventsOf(raw, now) {
+            const byId = new Map();
+            for (const event of Array.isArray(raw?.events) ? raw.events : []) {
+                if (valid(event, now)) byId.set(event.id, {id:event.id, at:event.at, outcome:event.outcome});
+            }
+            return [...byId.values()].sort((a,b)=>a.at-b.at).slice(-20);
+        }
+        function update(raw, event, now = Date.now()) {
+            const events = eventsOf(raw, now);
+            if (valid(event, now)) {
+                const old = events.findIndex(item=>item.id===event.id);
+                if (old !== -1) events.splice(old,1);
+                events.push(event);
+            }
+            return {events:eventsOf({events},now)};
+        }
+        function summarize(raw, now = Date.now()) {
+            const events = eventsOf(raw,now);
+            const successes = events.filter(event=>event.outcome==='pass').length;
+            let timeoutStreak = 0;
+            for (let i=events.length-1;i>=0 && events[i].outcome==='timeout';i--) timeoutStreak++;
+            let weight = 0, passedWeight = 0, lastSuccess = 0;
+            for (const event of events) {
+                const w = Math.pow(0.5,(now-event.at)/(7*DAY));
+                weight += w;
+                if (event.outcome==='pass') {passedWeight += w;lastSuccess=Math.max(lastSuccess,event.at);}
+            }
+            const latestWeight = events.length ? Math.pow(0.5,(now-events.at(-1).at)/(7*DAY)) : 0;
+            // Neutral prior lets untested routes precede repeatedly failing ones.
+            // Seven-day decay stops old evidence from dominating indefinitely.
+            const score = (passedWeight+1)/(weight+2) - Math.min(0.2,timeoutStreak*0.04)*latestWeight;
+            return {events, attempts:events.length, successes, rate:events.length?successes/events.length:null,
+                timeoutStreak, lastSuccess, score};
+        }
+        return {update,summarize};
     })();
 
     // Cross-origin player hosts are often created dynamically. On unrelated top
@@ -517,6 +562,18 @@
     // v2 counted opening attempts. Keep those untouched; start verified counts separately.
     const countKey = source => PREFIX + 'success-stats-v3:' + source.u;
     const hiddenKey = source => PREFIX + 'hidden:' + source.u;
+    const healthKey = source => PREFIX + 'route-health-v1:' + source.u;
+    const health = source => HealthTools.summarize(read(healthKey(source),{}));
+    function recordHealth(source, run, outcome) {
+        if (!run?.healthId || !['pass','fail','timeout','unknown'].includes(outcome)) return;
+        // One slot per route and run: retest/late validation replaces its result.
+        save(healthKey(source),HealthTools.update(read(healthKey(source),{}),{id:run.healthId,at:Date.now(),outcome}));
+        if (outcome === 'pass') {
+            const previous = stat(source);
+            // A successful retest refreshes recency without increasing totals.
+            save(countKey(source),{...previous,last:Date.now()});
+        }
+    }
     function stat(source) {
         const s = read(countKey(source), {});
         return {
@@ -530,9 +587,10 @@
         const storedOrder = read(PREFIX + 'manual-order', null);
         const order = Array.isArray(storedOrder) ? storedOrder.filter(url => typeof url === 'string') : [];
         const rank = source => order.includes(source.u) ? order.indexOf(source.u) : order.length;
-        return sources.map((source, index) => ({source, index, ...stat(source)}))
+        return sources.map((source, index) => ({source, index, ...stat(source), health:health(source)}))
             .filter(row => includeHidden || !isHidden(row.source))
-            .sort((a, b) => rank(a.source) - rank(b.source) || b.count - a.count || b.last - a.last || a.index - b.index)
+            .sort((a, b) => rank(a.source) - rank(b.source) || b.health.score - a.health.score
+                || b.last - a.last || a.index - b.index)
             .map(row => row.source);
     }
     function record(source, full = false) {
@@ -591,7 +649,7 @@
             <div class="source-list"></div>
             <div class="toolbar">
                 <button type="button" data-action="manage">管理线路</button>
-                <button type="button" data-action="sort-success">按成功次数排序</button>
+                <button type="button" data-action="sort-success">按近期健康排序</button>
                 <button type="button" data-action="restore-sources" hidden>恢复全部隐藏线路</button>
             </div>
             <p class="notice">第三方线路会收到当前视频网址。自动播放仅用于内嵌模式。</p>
@@ -620,6 +678,8 @@
         #${uid} .counter{display:block;opacity:1;font-size:11px;font-weight:700;white-space:normal;line-height:1.35;margin-top:3px;padding:2px 4px;border-radius:4px}
         #${uid} .counter.pass{color:#bbf7d0;background:#14532d;border:1px solid #4ade80} #${uid} .counter.fail{color:#fecaca;background:#7f1d1d;border:1px solid #f87171}
         #${uid} .counter.testing{color:#fef3c7;background:#78350f;border:1px solid #fbbf24} #${uid} .counter.idle{color:#e2e8f0;background:#334155;border:1px solid #64748b}
+        #${uid} .route-health{display:block;margin-top:5px;font-size:11px;line-height:1.5;color:#cbd5e1;font-weight:400;white-space:normal}
+        #${uid} .health-warning{color:#fbbf24;font-weight:700}
         #${uid} .probe-summary .metric{font-weight:700;padding:0 2px;border-radius:3px}
         #${uid} .probe-summary .tested{color:#93c5fd} #${uid} .probe-summary .passed{color:#86efac}
         #${uid} .probe-summary .parallel{color:#c4b5fd} #${uid} .probe-summary .timeout{color:#fbbf24}
@@ -693,6 +753,18 @@
             badge.textContent += ' · 累计可播放 ' + s.count + ' · 时长匹配 ' + s.full;
             if (probeStatus) badge.title = '本轮：' + probeStatus;
             button.appendChild(badge);
+            const h = health(source);
+            const healthInfo = document.createElement('span');
+            healthInfo.className = 'route-health';
+            const recent = h.rate === null ? '暂无样本' : `${Math.round(h.rate*100)}%（${h.successes}/${h.attempts}）`;
+            healthInfo.textContent = `近期成功率 ${recent} · 连续超时 ${h.timeoutStreak} 次`;
+            if (h.timeoutStreak > 0) healthInfo.classList.add('health-warning');
+            const last = document.createElement('span');
+            last.style.display='block';
+            last.textContent = '最近成功：' + (s.last ? new Date(s.last).toLocaleString() : '暂无');
+            healthInfo.appendChild(last);
+            healthInfo.title = '最近30天内最多20轮已结束检测；复测覆盖本轮结果，取消不新增记录。超时和无法确认也计入分母，不代表永久失效。最近成功为已通过实播的时间。';
+            button.appendChild(healthInfo);
             row.appendChild(button);
             if (managing) {
                 const toggle = document.createElement('button');
@@ -1026,7 +1098,7 @@
         order.splice(order.indexOf(from), 1);
         order.splice(destination, 0, from);
         save(PREFIX + 'manual-order', order);
-        render(); message('已保存自定义顺序；可点击“按成功次数排序”恢复自动排序。');
+        render(); message('已保存自定义顺序；可点击“按近期健康排序”恢复自动排序。');
     }
     list.addEventListener('dragstart', event => {
         if (!event.target.closest('.reorder')) return;
@@ -1220,6 +1292,9 @@
                 finished = true; cleanup();
                 probeStates.set(source.u, result.type);
                 probeResults.set(source.u, result.label);
+                if (!run.cancelled && smartRun === run && result.type !== 'cancelled') {
+                    recordHealth(source,run,result.type==='match'?'pass':result.type==='failed'?'fail':result.healthOutcome || 'unknown');
+                }
                 if (result.type !== 'match') sendControl(frame, token, 'abort');
                 resolve({...result, frame, token});
             };
@@ -1281,13 +1356,14 @@
                     const label = hasMatchingMetadata ? (run.target ? '时长匹配，未能自动实播' : '已读时长，未确认实播') :
                         lastDuration ? `${kind==='short'?'偏短':'偏长'} ${DurationTools.format(lastDuration)}` :
                         playerError ? '加载报错，未确认' : received ? '仍未读到有效时长' : '检测器未响应/页面未加载';
-                    finish({type:run.target && lastDuration && !hasMatchingMetadata ? 'failed' : 'unknown',label});
+                    finish({type:run.target && lastDuration && !hasMatchingMetadata ? 'failed' : 'unknown',
+                        healthOutcome:playerError?'unknown':'timeout',label});
                 }
                 if(Date.now()-latestRender>1200){latestRender=Date.now();render();}
             }, 500);
             const deadline = setTimeout(() => {
                 const label = hasMatchingMetadata ? (run.target ? '时长接近，未确认播放' : '已读时长，未确认实播') : playerError ? '播放器报错' : received ? '未读到有效时长' : '无法检测/加载超时';
-                finish({type:'unknown', label});
+                finish({type:'unknown', healthOutcome:playerError?'unknown':'timeout', label});
             }, 165000);
             run.cancellers.add(cancel);
             window.addEventListener('message', onMessage);
@@ -1328,6 +1404,7 @@
             if (DurationTools.classify(candidate.duration,found.seconds) !== 'match') {
                 probeStates.set(candidate.source.u,'failed');
                 probeResults.set(candidate.source.u,'补读正片时长后不匹配，已排除');
+                recordHealth(candidate.source,run,'fail');
                 sendControl(candidate.frame,candidate.token,'abort');
                 candidate.frame.remove(); ownedFrames.delete(candidate.frame);
             } else {
@@ -1382,7 +1459,7 @@
     }
     async function startSmartSelection() {
         stopSmartSelection();
-        const run = {url:location.href, key:videoPageUrl(), cancellers:new Set(), cancelled:false, matches:[], holdTimer:null};
+        const run = {url:location.href, key:videoPageUrl(), healthId:randomToken(), cancellers:new Set(), cancelled:false, matches:[], holdTimer:null};
         run.identity = IdentityTools.read(document);
         smartRun = run; probeResults.clear(); probeStates.clear();
         for (const source of ranked()) probeStates.set(source.u,'queued');
@@ -1399,9 +1476,8 @@
             ? `${target.origin} · 正片 ${DurationTools.format(target.seconds)} · 容差 ±${Math.round(DurationTools.tolerance(target.seconds))} 秒`
             : '未识别正片时长，照常检测播放与流畅度；完整时长未验证。可选填时长后重测。';
         let candidates = ranked();
-        const cached = read(PREFIX + 'duration-success:' + run.key, null);
-        if (target && cached && Date.now() - cached.at < 7 * 86400000 && DurationTools.classify(cached.target, target.seconds) === 'match')
-            candidates.sort((a, b) => Number(b.u === cached.u) - Number(a.u === cached.u));
+        // Respect the manual/health order; a historical winner must not jump
+        // ahead of healthier candidates in a batched run.
         if (!candidates.length) { smartRun = null; restorePlayer(); render(); message('没有可测试的线路，请先恢复至少一条。'); return; }
         mode = 'embedded'; save(SITE + 'mode', mode);
         const player = await play(candidates[0], false, true);
