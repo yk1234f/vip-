@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.2.0
+// @version           3.2.1
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
 // @run-at            document-start
 // @grant             GM_xmlhttpRequest
@@ -81,7 +81,10 @@
         { n: "playm3u8",   u: "https://www.playm3u8.cn/jiexi.php?url=" },
         { n: "盘古",       u: "https://www.pangujiexi.com/jiexi/?url=" },
         { n: "8090",       u: "https://www.8090g.cn/?url=" },
-        { n: "芒果TV1",    u: "https://video.isyour.love/player/getplayer?url=" },
+        // 从芒果TV1聚合页提取；虾米不重复添加，M1907保留原入口，2s0继续停用。
+        { n: "TXNP",       u: "https://bfq.txnp.cn/player?url=" },
+        { n: "Playr",      u: "https://super.playr.top/?url=" },
+        { n: "DMFLV",      u: "https://jx.dmflv.cc/?url=" },
         { n: "七七云解析", u: "https://jx.77flv.cc/?url=" },
         { n: "臻享视听",   u: "https://player.maqq.cn/?url=" },
         { n: "咸鱼新",     u: "https://jx.xyflv.cc/?url=" },
