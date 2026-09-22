@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.5.3
+// @version           3.6.0
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -240,7 +240,7 @@
 
     const HealthTools = (() => {
         const DAY = 86400000;
-        const outcomes = new Set(['pass', 'fail', 'timeout', 'unknown']);
+        const outcomes = new Set(['pass', 'fail', 'timeout', 'unknown', 'limited']);
         function valid(event, now) {
             return event && typeof event.id === 'string' && event.id.trim().length > 0 && event.id.length <= 128
                 && Number.isFinite(event.at) && event.at > 0 && event.at <= now
@@ -264,20 +264,20 @@
         }
         function summarize(raw, now = Date.now()) {
             const events = eventsOf(raw,now);
+            const confirmed = events.filter(event=>['pass','fail'].includes(event.outcome));
             const successes = events.filter(event=>event.outcome==='pass').length;
             let timeoutStreak = 0;
             for (let i=events.length-1;i>=0 && events[i].outcome==='timeout';i--) timeoutStreak++;
             let weight = 0, passedWeight = 0, lastSuccess = 0;
-            for (const event of events) {
+            for (const event of confirmed) {
                 const w = Math.pow(0.5,(now-event.at)/(7*DAY));
                 weight += w;
                 if (event.outcome==='pass') {passedWeight += w;lastSuccess=Math.max(lastSuccess,event.at);}
             }
-            const latestWeight = events.length ? Math.pow(0.5,(now-events.at(-1).at)/(7*DAY)) : 0;
             // Neutral prior lets untested routes precede repeatedly failing ones.
             // Seven-day decay stops old evidence from dominating indefinitely.
-            const score = (passedWeight+1)/(weight+2) - Math.min(0.2,timeoutStreak*0.04)*latestWeight;
-            return {events, attempts:events.length, successes, rate:events.length?successes/events.length:null,
+            const score = (passedWeight+1)/(weight+2);
+            return {events, attempts:confirmed.length, limited:events.length-confirmed.length, successes, rate:confirmed.length?successes/confirmed.length:null,
                 timeoutStreak, lastSuccess, score};
         }
         return {update,summarize};
@@ -477,7 +477,7 @@
                 if (!media.has(video)) media.set(video, {
                     id: String(++serial), muted:initialMute.has(video) ? initialMute.get(video) : video.muted, previousTime:null,
                     previousWall:null, progressed:0, lastAttempt:0, duration:null,
-                    startedAt:null, stalls:0, wasStalled:false, startup:null
+                    startedAt:null, stalls:0, wasStalled:false, startup:null, playError:null
                 });
                 const state = media.get(video);
                 video.muted = true;
@@ -507,13 +507,14 @@
                 let dropRatio = 0;
                 try { const q = video.getVideoPlaybackQuality?.(); if (q?.totalVideoFrames) dropRatio = q.droppedVideoFrames / q.totalVideoFrames; } catch {}
                 session.source.postMessage({channel:DURATION_CHANNEL, kind:'sample', token:session.token,
-                    mediaId:state.id, duration, identity:IdentityTools.read(document), progressed:state.progressed,
+                    mediaId:state.id, duration, playError:state.playError, identity:IdentityTools.read(document), progressed:state.progressed,
                     observed:state.startedAt === null ? 0 : (now - state.startedAt) / 1000,
                     startup:state.startup, stalls:state.stalls, buffer, dropRatio,
                     readyState:Number.isInteger(video.readyState)?video.readyState:(state.progressed>0?2:0), error:video.error?.code || 0}, session.origin);
                 if (video.paused && !video.ended && !video.error && now - state.lastAttempt > 2000) {
                     state.lastAttempt = now;
-                    try { video.play()?.catch(() => {}); } catch {}
+                    const rejected = error => {state.playError=typeof error?.name==='string'?error.name.slice(0,60):'UnknownError';};
+                    try { Promise.resolve(video.play()).then(()=>{state.playError=null;},rejected); } catch(error) {rejected(error);}
                 }
             });
         }
@@ -590,7 +591,7 @@
     const healthBackupKey = PREFIX + 'health-reset-backup-v1';
     const health = source => HealthTools.summarize(read(healthKey(source),{}));
     function recordHealth(source, run, outcome) {
-        if (!run?.healthId || !['pass','fail','timeout','unknown'].includes(outcome)) return;
+        if (!run?.healthId || !['pass','fail','timeout','unknown','limited'].includes(outcome)) return;
         // One slot per route and run: retest/late validation replaces its result.
         save(healthKey(source),HealthTools.update(read(healthKey(source),{}),{id:run.healthId,at:Date.now(),outcome}));
         if (outcome === 'pass') {
@@ -705,6 +706,7 @@
         #${uid} .counter{display:block;opacity:1;font-size:11px;font-weight:700;white-space:normal;line-height:1.35;margin-top:3px;padding:2px 4px;border-radius:4px}
         #${uid} .counter.pass{color:#bbf7d0;background:#14532d;border:1px solid #4ade80} #${uid} .counter.fail{color:#fecaca;background:#7f1d1d;border:1px solid #f87171}
         #${uid} .counter.testing{color:#fef3c7;background:#78350f;border:1px solid #fbbf24} #${uid} .counter.idle{color:#e2e8f0;background:#334155;border:1px solid #64748b}
+        #${uid} .counter.limited{color:#e0e7ff;background:#312e81;border:1px solid #a5b4fc}
         #${uid} .route-health{display:block;margin-top:5px;font-size:11px;line-height:1.5;color:#cbd5e1;font-weight:400;white-space:normal}
         #${uid} .health-warning{color:#fbbf24;font-weight:700}
         #${uid} .probe-summary .metric{font-weight:700;padding:0 2px;border-radius:3px}
@@ -769,12 +771,12 @@
             button.setAttribute('aria-pressed', String(source.u === selected));
             const badge = document.createElement('span');
             const state = probeStates.get(source.u) || 'idle';
-            const statusClass = {match:'pass',failed:'fail',testing:'testing',retesting:'testing'}[state] || 'idle';
+            const statusClass = {match:'pass',failed:'fail',limited:'limited',testing:'testing',retesting:'testing'}[state] || 'idle';
             badge.className = 'counter ' + statusClass;
             // The first label describes this run. Historical counters are
             // deliberately secondary so they cannot be mistaken for a live
             // playback result.
-            const resultLabel = {match:'通过',failed:'未通过',testing:'检测中',retesting:'复测中',unknown:'无法确认',cancelled:'已取消',queued:'待测',idle:'未测试'}[state];
+            const resultLabel = {match:'通过',failed:'未通过',limited:'无法检测',testing:'检测中',retesting:'复测中',unknown:'无法检测',cancelled:'已取消',queued:'待测',idle:'未测试'}[state];
             badge.textContent = resultLabel;
             if (probeStatus) badge.textContent += ' · ' + probeStatus;
             badge.textContent += ' · 时长匹配 ' + s.full;
@@ -784,7 +786,7 @@
             const healthInfo = document.createElement('span');
             healthInfo.className = 'route-health';
             const recent = h.rate === null ? '暂无样本' : `${Math.round(h.rate*100)}%（${h.successes}/${h.attempts}）`;
-            healthInfo.textContent = `近期成功率 ${recent} · 连续超时 ${h.timeoutStreak} 次`;
+            healthInfo.textContent = `近期成功率 ${recent} · 无法检测 ${h.limited} 次 · 连续超时 ${h.timeoutStreak} 次`;
             if (h.timeoutStreak > 0) healthInfo.classList.add('health-warning');
             const last = document.createElement('span');
             last.style.display='block';
@@ -794,7 +796,7 @@
             total.style.display = 'block';
             total.textContent = '累计成功次数：' + s.count;
             healthInfo.appendChild(total);
-            healthInfo.title = '最近30天内最多20轮已结束检测；复测覆盖本轮结果，取消不新增记录。超时和无法确认也计入分母，不代表永久失效。最近成功为已通过实播的时间。';
+            healthInfo.title = '最近30天内最多20轮记录；成功率仅计算明确通过或未通过。无法检测、超时及旧版无法确认不计分母，也不直接降低健康分。复测覆盖本轮，取消不新增记录。';
             button.appendChild(healthInfo);
             row.appendChild(button);
             if (managing) {
@@ -1343,6 +1345,7 @@
             let received = false;
             let lastDuration = null;
             let playerError = false;
+            let playBlocked = false;
             const cleanup = () => {
                 clearInterval(pulse); clearTimeout(deadline);
                 window.removeEventListener('message', onMessage);
@@ -1379,6 +1382,14 @@
                     finish({type:'failed',label:'片名、年份或集数冲突，已排除'}); return;
                 }
                 if (data.error) playerError = true;
+                playBlocked = data.playError === 'NotAllowedError';
+                if ([2,3,4].includes(data.error)) {
+                    finish({type:'failed',label:({2:'媒体网络错误',3:'媒体解码错误',4:'媒体格式不支持'})[data.error]+'，本次无法播放'});return;
+                }
+                if (playBlocked) {
+                    probeResults.set(source.u,'浏览器限制自动播放，等待播放器授权或重试');
+                    return;
+                }
                 if (typeof data.duration !== 'number' || !Number.isFinite(data.duration) || data.duration <= 0) {
                     probeResults.set(source.u,'等待时长（0:00 不是失败）');return;
                 }
@@ -1414,17 +1425,17 @@
                 const limit = observationDeadline || (started + loadingTimeout);
                 if(Date.now() >= limit) {
                     const kind = DurationTools.classify(lastDuration,run.target?.seconds);
-                    const label = hasMatchingMetadata ? (run.target ? '时长匹配，未能自动实播' : '已读时长，未确认实播') :
+                    const label = playBlocked ? '浏览器限制自动播放，需在播放器内点击后重测' : hasMatchingMetadata ? (run.target ? '时长匹配，未能自动实播' : '已读时长，未确认实播') :
                         lastDuration ? `${kind==='short'?'偏短':'偏长'} ${DurationTools.format(lastDuration)}` :
                         playerError ? '加载报错，未确认' : received ? '仍未读到有效时长' : '检测器未响应/页面未加载';
-                    finish({type:run.target && lastDuration && !hasMatchingMetadata ? 'failed' : 'unknown',
-                        healthOutcome:playerError?'unknown':'timeout',label});
+                    finish({type:!playBlocked && run.target && lastDuration && !hasMatchingMetadata ? 'failed' : 'limited',
+                        healthOutcome:playBlocked?'limited':'timeout',label});
                 }
                 if(Date.now()-latestRender>1200){latestRender=Date.now();render();}
             }, 500);
             const deadline = setTimeout(() => {
-                const label = hasMatchingMetadata ? (run.target ? '时长接近，未确认播放' : '已读时长，未确认实播') : playerError ? '播放器报错' : received ? '未读到有效时长' : '无法检测/加载超时';
-                finish({type:'unknown', healthOutcome:playerError?'unknown':'timeout', label});
+                const label = playBlocked ? '浏览器限制自动播放，需点击后重测' : hasMatchingMetadata ? '已读时长，未确认播放' : playerError ? '播放中断，未确认' : received ? '检测器已连接，未读到有效时长' : '检测器未响应（可能未注入或页面加载受限）';
+                finish({type:'limited', healthOutcome:playBlocked?'limited':'timeout', label});
             }, 165000);
             run.cancellers.add(cancel);
             window.addEventListener('message', onMessage);
