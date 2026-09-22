@@ -49,7 +49,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.5.2
+// @version           3.5.3
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -403,6 +403,7 @@
         const media = new Map();
         let armed = /^vrprobe:[a-f0-9]{32}$/.test(window.name);
         const initialMute = new WeakMap();
+        let clearSoundRecovery = () => {};
         function earlyMute(event) {
             if ((!armed && !session) || !event.target.matches?.('video')) return;
             if (!initialMute.has(event.target)) initialMute.set(event.target, event.target.muted);
@@ -414,6 +415,7 @@
             mediaAccess.collect().filter(el => el.localName !== 'audio').forEach(callback);
         }
         function restore(commitId = null) {
+            clearSoundRecovery();
             armed = false;
             // Disable the guard before changing muted; some players dispatch
             // volumechange synchronously and would otherwise mute the winner again.
@@ -429,18 +431,39 @@
                         if (video.volume === 0) video.volume = 0.5;
                         return video.play();
                     };
+                    let active = true, button = null, retryTimer = null;
+                    const audible = () => !video.paused && !video.muted && video.volume > 0 && video.readyState >= 2;
+                    const cleanup = () => {
+                        active = false; clearTimeout(retryTimer); button?.remove();
+                        for (const name of ['playing','volumechange','timeupdate']) video.removeEventListener(name,checkRecovered);
+                    };
+                    const checkRecovered = () => { if (audible()) cleanup(); };
+                    clearSoundRecovery = cleanup;
+                    for (const name of ['playing','volumechange','timeupdate']) video.addEventListener(name,checkRecovered);
                     const offerGesture = () => {
-                        if (!video.isConnected || document.querySelector('[data-vip-enable-sound]')) return;
-                        const button = document.createElement('button');
+                        if (!active || !video.isConnected || audible() || button) return;
+                        button = document.createElement('button');
                         button.dataset.vipEnableSound = 'true';
-                        button.textContent = '点击开启声音并播放';
+                        button.textContent = '浏览器限制自动有声播放，点击继续';
                         button.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:2147483647;background:#166534;color:white;border:2px solid white;border-radius:8px;padding:12px;cursor:pointer;';
                         button.addEventListener('click', () => {
-                            try { Promise.resolve(enableSound()).then(()=>button.remove(),()=>{button.textContent='请点击播放器开启声音';}); } catch {}
+                            attempt(false);
                         });
                         (document.body || document.documentElement).append(button);
                     };
-                    try { Promise.resolve(enableSound()).catch(offerGesture); } catch { offerGesture(); }
+                    const failed = (error, retry) => {
+                        if (!active || !video.isConnected) return;
+                        if (audible()) {cleanup();return;}
+                        if (error?.name === 'NotAllowedError') offerGesture();
+                        else if (error?.name === 'AbortError' && retry) retryTimer=setTimeout(()=>attempt(false),350);
+                        else cleanup();
+                    };
+                    const attempt = retry => {
+                        if (!active || !video.isConnected) return;
+                        try { Promise.resolve(enableSound()).then(checkRecovered,error=>failed(error,retry)); }
+                        catch (error) {failed(error,retry);}
+                    };
+                    attempt(true);
                 } else { try { video.pause(); } catch {} }
             }
             media.clear();
@@ -512,6 +535,7 @@
                 originalStop?.(); originalStop=null; return;
             }
             if (data.kind === 'probe') {
+                clearSoundRecovery();
                 if(originalStop) {originalStop();originalStop=null;}
                 if (session && session.token !== data.token) restore();
                 const began = session?.began || Date.now();
@@ -647,14 +671,14 @@
                 </div>
                 <p class="probe-summary hint" role="status"></p>
             </div>
-            <div class="source-list"></div>
-            <div class="toolbar">
+            <div class="toolbar route-toolbar">
                 <button type="button" data-action="manage">管理线路</button>
                 <button type="button" data-action="sort-success">按近期健康排序</button>
                 <button type="button" data-action="restore-sources" hidden>恢复全部隐藏线路</button>
                 <button type="button" data-action="reset-health" hidden title="清空所有现有线路（含隐藏线路）的近期记录，保留累计次数、最近成功时间及手动顺序">重新计算健康记录</button>
                 <button type="button" data-action="undo-health-reset" hidden>恢复上次健康记录</button>
             </div>
+            <div class="source-list"></div>
             <p class="notice">第三方线路会收到当前视频网址。自动播放仅用于内嵌模式。</p>
             <p class="status" role="status" aria-live="polite"></p>
         </section>`;
