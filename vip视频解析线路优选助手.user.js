@@ -9,7 +9,7 @@
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.9.1
+// @version           3.9.4
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -265,7 +265,7 @@
                 try {
                     nativeProto.play = function (...args) {
                         seen.add(this);
-                        if (blocker) { blocker(this, true); return Promise.resolve(); }
+                        if (blocker && this.ownerDocument === ownerDocument) { blocker(this, true); return Promise.resolve(); }
                         return nativePlay.apply(this, args);
                     };
                 } catch {}
@@ -286,7 +286,7 @@
                 if (media.isConnected) result.add(media);
                 else seen.delete(media);
             }
-            return [...result].filter(media => typeof media.pause === 'function');
+            return [...result].filter(media => media.ownerDocument === ownerDocument && typeof media.pause === 'function');
         }
         function block() {
             const saved = new Map();
@@ -294,7 +294,7 @@
             const observers = [];
             let running = true;
             function silence(media, force = false) {
-                if (!running || !media || typeof media.pause !== 'function') return;
+                if (!running || !media || media.ownerDocument !== ownerDocument || typeof media.pause !== 'function') return;
                 const first = !saved.has(media);
                 if (first) saved.set(media, {muted:media.muted, volume:media.volume,
                     autoplay:media.getAttribute?.('autoplay'), preload:media.getAttribute?.('preload')});
@@ -352,6 +352,9 @@
         let originalStop = null;
         let originalLease = 0;
         let serial = 0;
+        let committed = false;
+        let stopMonitor = () => {};
+        const retiredTokens = new Set();
         const media = new Map();
         let armed = /^vrprobe:[a-f0-9]{32}$/.test(window.name);
         const initialMute = new WeakMap();
@@ -367,13 +370,30 @@
             mediaAccess.collect().filter(el => el.localName !== 'audio').forEach(callback);
         }
         function restore(commitId = null) {
+            stopMonitor();
+            const controlSession = session;
             clearSoundRecovery();
             armed = false;
             // Disable the guard before changing muted; some players dispatch
             // volumechange synchronously and would otherwise mute the winner again.
+            if (session) { retiredTokens.add(session.token); if (retiredTokens.size > 64) retiredTokens.delete(retiredTokens.values().next().value); }
             session = null;
             for (const [video, state] of media) {
                 if (commitId === state.id) {
+                    // Passive diagnostics: never call play/pause or change volume here.
+                    if (controlSession) {
+                        let pauses=0,waits=0,ticks=0;
+                        const onPause=()=>pauses++, onWait=()=>waits++;
+                        video.addEventListener('pause',onPause); video.addEventListener('waiting',onWait);
+                        const monitor=setInterval(()=>{
+                            if(!video.isConnected || ++ticks>120){stopMonitor();return;}
+                            let buffer=0;
+                            try { for(let i=0;i<video.buffered.length;i++) if(video.buffered.start(i)<=video.currentTime && video.buffered.end(i)>=video.currentTime) buffer=video.buffered.end(i)-video.currentTime; }catch{}
+                            controlSession.source.postMessage({channel:DURATION_CHANNEL,kind:'playback-health',token:controlSession.token,
+                                time:video.currentTime,paused:video.paused,ready:video.readyState,buffer,pauses,waits,error:video.error?.code||0},controlSession.origin);
+                        },1000);
+                        stopMonitor=()=>{clearInterval(monitor);video.removeEventListener('pause',onPause);video.removeEventListener('waiting',onWait);};
+                    }
                     // The winner must be audible even when the parser starts
                     // muted or a fresh retest session inherited probe muting.
                     const enableSound = () => {
@@ -423,6 +443,14 @@
         function sample() {
             if (!session) return;
             if (Date.now() - session.touched > 20000) { restore(); return; }
+            const pageText = (document.body?.innerText || document.body?.textContent || '').slice(0,6000);
+            const restriction = /(?:你请求异常|请求过于频繁|请求频繁|访问过于频繁|too many requests)/i.test(pageText);
+            if (restriction) {
+                const wait = pageText.match(/请\s*(\d+)\s*分钟后重试/);
+                session.source.postMessage({channel:DURATION_CHANNEL,kind:'status',token:session.token,
+                    restricted:true, state:'站点限制请求' + (wait ? '，提示等待' + wait[1] + '分钟' : '')},session.origin);
+                return;
+            }
             session.source.postMessage({channel:DURATION_CHANNEL,kind:'status',token:session.token,
                 state:mediaAccess.collect().length?'等待视频元数据或播放':'等待播放器出现'},session.origin);
             visit(document, video => {
@@ -479,7 +507,7 @@
             } catch { return; }
             if (typeof data.token !== 'string' || !/^[a-f0-9]{32}$/.test(data.token)) return;
             if (data.kind === 'source-stop') {
-                if(session) return;
+                if(session || committed) return;
                 if(!originalStop) originalStop=mediaAccess.block();
                 originalLease=Date.now();
                 return;
@@ -487,7 +515,10 @@
             if (data.kind === 'source-release') {
                 originalStop?.(); originalStop=null; return;
             }
+            if (retiredTokens.has(data.token)) return;
             if (data.kind === 'probe') {
+                committed = false;
+                stopMonitor();
                 clearSoundRecovery();
                 if(originalStop) {originalStop();originalStop=null;}
                 if (session && session.token !== data.token) restore();
@@ -497,6 +528,8 @@
             } else if (session?.token === data.token && data.kind === 'hold') {
                 session.mode = 'hold'; session.touched = Date.now(); sample();
             } else if (session?.token === data.token && data.kind === 'commit') {
+                committed = true;
+                originalStop?.(); originalStop = null;
                 restore(typeof data.mediaId === 'string' ? data.mediaId : null);
             } else if (session?.token === data.token && data.kind === 'abort') restore();
         });
@@ -656,6 +689,7 @@
                 </div>
             </div>
             <div class="now-playing" hidden role="status"></div>
+            <div class="playback-tools" hidden><p class="playback-health hint" role="status"></p><button type="button" data-action="reload-winner" title="丢弃测试播放器，全新加载；播放进度会重置">重新载入当前线路</button><button type="button" data-action="playback-diagnostics">显示播放诊断</button><textarea class="playback-diagnostics" aria-label="播放诊断，可全选复制" readonly hidden></textarea></div>
             <div class="test-progress" hidden><div class="phase-labels"></div><progress max="100" value="0" aria-label="线路初测和复测进度"></progress></div>
             <p class="probe-summary hint" role="status"></p>
             <div class="route-filters" aria-label="筛选本轮线路结果"></div>
@@ -940,6 +974,8 @@
         #${uid} .playback-controls [data-action="restore-player"]{white-space:nowrap;flex:none}
         #${uid} .source-list{grid-auto-rows:1px;grid-auto-flow:row dense;gap:10px}
         #${uid} .source-list.manage{grid-auto-rows:auto}
+        #${uid} .playback-tools{margin:6px 0 10px}#${uid} .playback-tools button{font-size:11px;margin-right:6px}#${uid} .playback-diagnostics{display:block;width:100%;height:140px;background:#102036;color:#cfdeef;margin-top:8px}
+        #${uid} .panel{overflow-anchor:none}
         .${hostClass}>:not(#${frameId}){visibility:hidden!important;pointer-events:none!important}
         #${frameId}{display:block!important;visibility:visible!important;opacity:1!important;position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:0!important;z-index:2147483000!important;background:#000!important;pointer-events:auto!important}
     `);
@@ -990,6 +1026,7 @@
         area.classList.toggle('ended', ended);
     }
     function render() {
+        const scrollBefore = panel.scrollTop;
         cardResizeObserver?.disconnect();
         list.replaceChildren();
         list.classList.toggle('manage', managing);
@@ -999,6 +1036,7 @@
         const playingBar = box.querySelector('.now-playing');
         const current = activePlayer && !activePlayer.testing && activePlayer.frame.isConnected ? activePlayer.source : null;
         playingBar.hidden = !current;
+        box.querySelector('.playback-tools').hidden = !current;
         playingBar.replaceChildren();
         if (current) {
             const label = document.createElement('span'); label.textContent = '正在播放 · ' + current.n;
@@ -1007,7 +1045,12 @@
             score.textContent = match ? match[1] + ' 分' : '未实测';
             playingBar.innerHTML = uiIcon('play'); playingBar.append(label, score);
         }
-        const available = ranked(managing);
+        let available = ranked(managing);
+        // Health scores change while samples arrive; keep cards in their run order.
+        if (smartRun && !managing) {
+            if (!smartRun.displayOrder) smartRun.displayOrder = available.map(source => source.u);
+            available.sort((a,b) => smartRun.displayOrder.indexOf(a.u) - smartRun.displayOrder.indexOf(b.u));
+        }
         const matchesFilter = (source, filter) => filter === 'all' || (filter === 'pass' ? probeStates.get(source.u) === 'match' : filter === 'limited' ? ['limited','unknown'].includes(probeStates.get(source.u)) : probeStates.get(source.u) === 'failed');
         const filters = box.querySelector('.route-filters'); filters.replaceChildren();
         for (const [value, label] of [['all','全部'],['pass','通过'],['limited','无法检测'],['fail','未通过']]) {
@@ -1140,7 +1183,19 @@
         box.querySelector('.probe-timeout').disabled = !!smartRun;
         layoutCards();
         positionPanel();
+        panel.scrollTop = scrollBefore;
     }
+    window.addEventListener('message',event=>{
+        const d=event.data;
+        if(!activePlayer || activePlayer.testing || d?.channel!==DURATION_CHANNEL || d.kind!=='playback-health' || d.token!==activePlayer.monitorToken) return;
+        if(!/^https?:\/\//.test(event.origin) || !descendantWindows(activePlayer.frame).includes(event.source))return;
+        if(![d.time,d.ready,d.buffer,d.pauses,d.waits,d.error].every(Number.isFinite) || typeof d.paused!=='boolean')return;
+        const samples=activePlayer.diagnostics || (activePlayer.diagnostics=[]);
+        samples.push({at:new Date().toISOString(),host:new URL(event.origin).hostname,time:d.time,paused:d.paused,ready:d.ready,buffer:d.buffer,pauses:d.pauses,waits:d.waits,error:d.error});
+        if(samples.length>20)samples.shift();
+        const hint=d.error?'媒体错误 '+d.error:d.paused?'当前暂停（不自动干预）':d.ready<3 && d.buffer<1?'正在等待媒体数据':'正在播放';
+        box.querySelector('.playback-health').textContent=`${hint} · 暂停事件 ${d.pauses} · 等待事件 ${d.waits} · 缓冲 ${d.buffer.toFixed(1)}秒`;
+    });
     function setPosition(left, top, persist = false) {
         const x = Math.max(0, Math.min(left, Math.max(0, innerWidth - 46)));
         const y = Math.max(0, Math.min(top, Math.max(0, innerHeight - 64)));
@@ -1317,6 +1372,8 @@
         originalMediaGuard = guardOriginalMedia();
         const cleanup = guardOriginalFrames(container, frame);
         activePlayer = {container, frame, styles, cleanup, source, testing};
+        box.querySelector('.playback-health').textContent=testing?'':'手动载入：未启用测试控制。';
+        box.querySelector('.playback-diagnostics').hidden=true;
         if (!testing) choose(source);
         // Opening alone is not a verified success.
         render();
@@ -1333,6 +1390,19 @@
     box.addEventListener('click', event => {
         const button = event.target.closest('button');
         if (!button || !box.contains(button)) return;
+        if (button.dataset.action === 'reload-winner') {
+            if(!activePlayer || activePlayer.testing)return;
+            const source=activePlayer.source;
+            stopSmartSelection(); void play(source,true);
+            box.querySelector('.playback-health').textContent='已全新载入，不进行测试或复测；播放进度重置。';
+            return;
+        }
+        if (button.dataset.action === 'playback-diagnostics') {
+            const area=box.querySelector('.playback-diagnostics');
+            area.hidden=false;
+            area.value=JSON.stringify({version:'3.9.4',route:activePlayer?.source?.n,samples:activePlayer?.diagnostics||[],note:'被动采样，不干预播放；暂停事件也可能来自手动操作。'},null,2);
+            area.focus();area.select();return;
+        }
         if (button.dataset.filter) {
             routeFilter = button.dataset.filter; render();
             box.querySelector(`[data-filter="${routeFilter}"]`)?.focus(); return;
@@ -1714,6 +1784,9 @@
                 if (!/^https?:\/\//.test(event.origin) || !descendantWindows(frame).includes(event.source)) return;
                 if(data.kind === 'status') {
                     received = true;
+                    if (data.restricted === true) {
+                        finish({type:'limited',healthOutcome:'limited',label:String(data.state || '站点限制请求').slice(0,80) + ' · ' + new URL(event.origin).hostname}); return;
+                    }
                     if(!firstDurationAt) probeResults.set(source.u, String(data.state || '等待播放器').slice(0,40));
                     return;
                 }
@@ -1846,7 +1919,7 @@
         for (const frame of [...ownedFrames]) if(frame!==best.frame) {frame.remove();ownedFrames.delete(frame);}
         best.frame.id=frameId;best.frame.style.cssText='';
         activePlayer.frame=best.frame;activePlayer.source=best.source;activePlayer.testing=false;
-        choose(best.source);sendControl(best.frame,best.token,'commit',best);
+        choose(best.source);activePlayer.monitorToken=best.token;sendControl(best.frame,best.token,'commit',best);
         render();
         box.querySelector('.probe-summary').textContent='已提前选线，其余测试已停止。';
         message(`正在播放 ${source.n}，已保留播放器和进度。${run.target ? '' : '完整时长未验证。'}`);
@@ -1994,6 +2067,7 @@
                 best.frame.title = best.source.n + ' 第三方播放器';
                 activePlayer.frame = best.frame; activePlayer.source = best.source; activePlayer.testing = false;
                 choose(best.source);
+                activePlayer.monitorToken=best.token;
                 sendControl(best.frame, best.token, 'commit', best);
                 save(PREFIX + 'duration-success:' + run.key, {u:best.source.u, target:run.target?.seconds ?? null, fullDurationVerified:!!run.target, actual:best.duration, at:Date.now()});
                 summary(); render();
