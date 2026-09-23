@@ -6,20 +6,8 @@
 
 ## 界面示例
 
-测试进行中会显示并发进度、加载等待时间和不同颜色的线路状态：
-
-https://github.com/yk1234f/vip-/blob/main/card-design-v3.8.2.png
 
 ![线路测试中](https://github.com/yk1234f/vip-/blob/main/card-design-v3.8.2.png)
-
-![线路测试中](https://raw.githubusercontent.com/yk1234f/vip-/main/线路测试中.png)
-
-测试结束后会保留本轮详细结果，并在末尾显示本地累计通过次数：
-
-![线路测试完成](https://raw.githubusercontent.com/yk1234f/vip-/main/线路测试完成.png)
-
-
-
 
 
 ## 3.6.0 更新
