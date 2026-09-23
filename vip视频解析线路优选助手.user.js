@@ -3,53 +3,13 @@
 // @name:zh-CN        vip视频解析线路优选助手
 // @namespace         urn:yk1234f:vip-route-selector
 // @author            yk1234f
-// @include           *://v.qq.com/x/page/*
-// @include           *://v.qq.com/x/cover/*
-// @include           *://v.qq.com/tv/*
-// @include           *://*.iqiyi.com/v_*
-// @include           *://*.iqiyi.com/a_*
-// @include           *://*.iqiyi.com/w_*
-// @include           *://*.iq.com/play/*
-// @include           *://v.youku.com/v_*
-// @include           *://*.youku.com/v_*
-// @include           *://*.youku.com/video*
-// @include           *://*.youku.com/*?vid=*
-// @include           *://*.mgtv.com/b/*
-// @include           *://*.tudou.com/listplay/*
-// @include           *://*.tudou.com/programs/view/*
-// @include           *://*.tudou.com/albumplay/*
-// @include           *://film.sohu.com/album/*
-// @include           *://tv.sohu.com/v/*
-// @include           *://*.bilibili.com/*
-// @include           *://*.bilibili.com/video/*
-// @include           *://*.bilibili.com/bangumi/play/*
-// @include           *://v.pptv.com/show/*
-// @include           *://vip.pptv.com/show/*
-// @include           *://www.wasu.cn/Play/show/*
-// @include           *://*.le.com/ptv/vplay/*
-// @include           *://*.acfun.cn/v/*
-// @include           *://*.acfun.cn/bangumi/*
-// @include           *://*.1905.com/play/*
-// @include           *://m.v.qq.com/x/page/*
-// @include           *://m.v.qq.com/x/cover/*
-// @include           *://m.v.qq.com/*
-// @include           *://m.iqiyi.com/*
-// @include           *://m.iqiyi.com/kszt/*
-// @include           *://m.youku.com/video/*
-// @include           *://m.mgtv.com/b/*
-// @include           *://m.tv.sohu.com/v/*
-// @include           *://m.film.sohu.com/album/*
-// @include           *://m.pptv.com/show/*
-// @include           *://m.bilibili.com/anime/*
-// @include           *://m.bilibili.com/video/*
-// @include           *://m.bilibili.com/bangumi/play/*
 // @grant             GM_addStyle
 // @grant             GM_openInTab
 // @grant             GM_getValue
 // @grant             GM_setValue
 // @charset           UTF-8
 // @license           GPL License
-// @version           3.6.0
+// @version           3.9.1
 // @updateURL         https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.meta.js
 // @downloadURL       https://update.greasyfork.org/scripts/596803/vip%E8%A7%86%E9%A2%91%E8%A7%A3%E6%9E%90%E7%BA%BF%E8%B7%AF%E4%BC%98%E9%80%89%E5%8A%A9%E6%89%8B.user.js
 // @description       按正片时长自动试线，观察实际播放进度，持续暂停原视频；检测未知时明确提示。
@@ -74,22 +34,14 @@
         { n: "M1907",      u: "https://im1907.top/?jx=" },
         // 暂停：2s0、777/花旗、芒果 m3u8.tv、七哥、973、夜幕
         { n: "IK9",        u: "https://yparse.ik9.cc/index.php?url=" },
-        { n: "789解析",    u: "https://jiexi.789jiexi.com/?url=" },
-        { n: "爱豆",       u: "https://jx.aidouer.net/?url=" },
         { n: "playerjy",   u: "https://jx.playerjy.com/?url=" },
-        { n: "咸鱼TV",     u: "https://jx.xymp4.cc/?url=" },
         { n: "IK",         u: "https://pl.aszzys.com/player/ec.php?code=ikm3u8&if=1&url=" },
-        { n: "ckplayer",   u: "https://www.ckplayer.vip/jiexi/?url=" },
-        { n: "playm3u8",   u: "https://www.playm3u8.cn/jiexi.php?url=" },
-        { n: "盘古",       u: "https://www.pangujiexi.com/jiexi/?url=" },
-        { n: "8090",       u: "https://www.8090g.cn/?url=" },
         // 从芒果TV1聚合页提取；虾米不重复添加，M1907保留原入口，2s0继续停用。
         { n: "TXNP",       u: "https://bfq.txnp.cn/player?url=" },
         { n: "Playr",      u: "https://super.playr.top/?url=" },
         { n: "DMFLV",      u: "https://jx.dmflv.cc/?url=" },
         { n: "七七云解析", u: "https://jx.77flv.cc/?url=" },
         { n: "臻享视听",   u: "https://player.maqq.cn/?url=" },
-        { n: "咸鱼新",     u: "https://jx.xyflv.cc/?url=" },
         { n: "HLS",        u: "https://jx.hls.one/?url=" }
     ];
     const hosts = [
@@ -569,6 +521,17 @@
     const selector = hosts.find(([host]) => host === location.hostname)?.[1];
     if (!selector || window.top !== window.self || document.querySelector('[data-vip-tools-root]')) return;
 
+    const upstreamAliases = {
+        'https://jiexi.789jiexi.com/?url=':'https://jx.xmflv.com/?url=',
+        'https://www.ckplayer.vip/jiexi/?url=':'https://jx.xmflv.com/?url=',
+        'https://www.playm3u8.cn/jiexi.php?url=':'https://jx.xmflv.com/?url=',
+        'https://www.pangujiexi.com/jiexi/?url=':'https://jx.xmflv.com/?url=',
+        'https://www.8090g.cn/?url=':'https://jx.xmflv.com/?url=',
+        'https://jx.aidouer.net/?url=':'https://jx.77flv.cc/?url=',
+        'https://jx.xymp4.cc/?url=':'https://jx.77flv.cc/?url=',
+        'https://jx.xyflv.cc/?url=':'https://jx.77flv.cc/?url='
+    };
+    const upstreamNameAliases = {'789解析':'虾米',ckplayer:'虾米',playm3u8:'虾米','盘古':'虾米','8090':'虾米','爱豆':'七七云解析','咸鱼TV':'七七云解析','咸鱼新':'七七云解析'};
     const PREFIX = 'vip_tools_v2:';
     const SITE = PREFIX + location.hostname + ':';
     const uid = 'vip-tools-' + Math.random().toString(36).slice(2);
@@ -611,7 +574,7 @@
     const isHidden = source => yes(read(hiddenKey(source), false));
     function ranked(includeHidden = false) {
         const storedOrder = read(PREFIX + 'manual-order', null);
-        const order = Array.isArray(storedOrder) ? storedOrder.filter(url => typeof url === 'string') : [];
+        const order = Array.isArray(storedOrder) ? storedOrder.filter(url => typeof url === 'string').map(url => upstreamAliases[url] || url) : [];
         const rank = source => order.includes(source.u) ? order.indexOf(source.u) : order.length;
         return sources.map((source, index) => ({source, index, ...stat(source), health:health(source)}))
             .filter(row => includeHidden || !isHidden(row.source))
@@ -626,8 +589,9 @@
     let autoOn = yes(read(SITE + 'auto', read('auto_player_key' + location.host, false)));
     const oldIndex = Number(read('auto_player_value_' + location.host, 0));
     const legacyNames = ['虾米','M1907','2s0','IK9','777','789解析','爱豆','芒果','七哥','playerjy','咸鱼TV','973解析','IK',null,'ckplayer','playm3u8','夜幕','盘古','8090','芒果TV1','FF','HM','LZ','七七云解析','臻享视听'];
-    const legacySource = Number.isInteger(oldIndex) ? sources.find(source => source.n === legacyNames[oldIndex]) : null;
+    const legacySource = Number.isInteger(oldIndex) ? sources.find(source => source.n === (upstreamNameAliases[legacyNames[oldIndex]] || legacyNames[oldIndex])) : null;
     let selected = read(SITE + 'selected', legacySource?.u || '');
+    selected = upstreamAliases[selected] || selected;
     let mode = read(SITE + 'mode', 'embedded') === 'tab' ? 'tab' : 'embedded';
     let managing = false;
     let activePlayer = null;
@@ -637,10 +601,30 @@
     let smartOn = read(SITE + 'smart', true) !== false;
     const probeResults = new Map();
     const probeStates = new Map();
+    const expandedRoutes = new Set();
+    let routeFilter = 'all';
+    let density = read(PREFIX + 'density', 'compact') === 'comfortable' ? 'comfortable' : 'compact';
+    let testProgress = null;
     let generation = 0;
     let cancelWait = null;
     let statusTimer = null;
     let leaveTimer = null;
+    // Local inline vectors: no external icon or font dependency.
+    function uiIcon(name) {
+        const paths = {
+            play:'<path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/>',
+            restore:'<path d="M3 10a9 9 0 1 1 2 9M3 4v6h6"/>',
+            sort:'<path d="M7 20V4m-4 4 4-4 4 4m6-4v16m-4-4 4 4 4-4"/>',
+            settings:'<path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/><circle cx="12" cy="12" r="3"/>',
+            check:'<path d="m5 12 4 4L19 6"/>',
+            help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2m0 3h.01"/>',
+            close:'<path d="m6 6 12 12M6 18 18 6"/>',
+            clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            grip:'<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3"/>',
+            chevron:'<path d="m8 10 4 4 4-4"/>'
+        };
+        return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.help}</svg>`;
+    }
     const box = document.createElement('div');
     box.id = uid;
     box.dataset.vipToolsRoot = '';
@@ -648,38 +632,42 @@
         <button class="launcher" type="button" aria-label="打开线路菜单" aria-expanded="false">VIP</button>
         <button class="drag-handle" type="button" title="拖动；方向键微调" aria-label="拖动悬浮按钮">⠿</button>
         <section class="panel" aria-label="播放线路" hidden>
-            <header><strong>播放线路</strong><button type="button" data-action="close" aria-label="关闭菜单">×</button></header>
-            <div class="toolbar">
+            <header><div class="brand"><span class="brand-logo" aria-hidden="true">${uiIcon('play')}</span><strong>线路优选</strong><small class="panel-subtitle">自动测试 · 智能择优</small></div><button type="button" data-action="close" aria-label="关闭菜单">${uiIcon('close')}</button></header>
+            <div class="playback-controls"><div class="toolbar mode-switch">
                 <button type="button" data-mode="embedded">内嵌播放</button>
                 <button type="button" data-mode="tab">新标签页</button>
             </div>
             <div class="toolbar">
                 <button type="button" data-action="auto">自动播放</button>
-                <button type="button" data-action="restore-player">恢复原播放器</button>
+                <button type="button" data-action="restore-player">${uiIcon('restore')} 恢复原播放器</button>
             </div>
-            <p class="hint">实播通过才计成功；正片时长已知时还须匹配，未知时照常测试。拖动线路左侧 ↕ 可自行排序。</p>
+            </div>
             <div class="duration-controls">
-                <label>正片时长 <input class="target-duration" placeholder="自动 / 45分 / 45 min" aria-label="正片时长，支持中文英文和时分秒"></label>
+                <div class="duration-field"><span>正片时长 <span class="info-icon" title="支持自动识别，或手动填写分钟、16:18、45分、45 min。时长未知也可测试。">ⓘ</span></span><label class="duration-choice"><input type="radio" name="${uid}-duration" value="auto" checked>自动识别</label><label class="duration-choice"><input type="radio" name="${uid}-duration" value="manual">手动填写</label><input class="target-duration" placeholder="例如：120" aria-label="正片时长，支持中文英文和时分秒"><span class="duration-unit">分钟</span></div>
                 <p class="target-note hint">支持 16:18、16分18秒、16 min 18 sec。</p>
-                <div class="toolbar">
-                    <button type="button" data-action="smart">实测全部并择优</button>
+                <div class="toolbar test-actions">
+                    <button type="button" data-action="smart">${uiIcon('play')} 开始择优</button>
                     <button type="button" data-action="stop-smart" hidden>停止测试并观看已通过线路</button>
                 </div>
-                <div class="toolbar">
+                <div class="toolbar test-settings">
                     <button type="button" data-action="smart-toggle">按时长优选：开</button>
                     <label>同时测试 <select class="probe-concurrency" aria-label="同时测试线路数"><option value="all" selected>全部</option><option value="6">6 条</option><option value="3">3 条</option><option value="1">1 条</option></select></label>
                     <label>加载等待 <select class="probe-timeout" aria-label="线路加载等待时间"><option value="30" selected>30 秒</option><option value="60">60 秒</option><option value="90">90 秒</option><option value="120">120 秒</option></select></label>
                 </div>
-                <p class="probe-summary hint" role="status"></p>
             </div>
-            <div class="toolbar route-toolbar">
+            <div class="now-playing" hidden role="status"></div>
+            <div class="test-progress" hidden><div class="phase-labels"></div><progress max="100" value="0" aria-label="线路初测和复测进度"></progress></div>
+            <p class="probe-summary hint" role="status"></p>
+            <div class="route-filters" aria-label="筛选本轮线路结果"></div>
+            <div class="toolbar route-toolbar"><strong class="routes-heading">可用线路</strong>
                 <button type="button" data-action="manage">管理线路</button>
-                <button type="button" data-action="sort-success">按近期健康排序</button>
+                <button type="button" data-action="sort-success">${uiIcon('sort')} 近期健康排序</button>
                 <button type="button" data-action="restore-sources" hidden>恢复全部隐藏线路</button>
                 <button type="button" data-action="reset-health" hidden title="清空所有现有线路（含隐藏线路）的近期记录，保留累计次数、最近成功时间及手动顺序">重新计算健康记录</button>
                 <button type="button" data-action="undo-health-reset" hidden>恢复上次健康记录</button>
             </div>
             <div class="source-list"></div>
+            <div class="density-controls" aria-label="显示密度"><span>显示密度</span><button type="button" data-density="compact">紧凑</button><button type="button" data-density="comfortable">舒适</button></div>
             <p class="notice">第三方线路会收到当前视频网址。自动播放仅用于内嵌模式。</p>
             <p class="status" role="status" aria-live="polite"></p>
         </section>`;
@@ -718,6 +706,240 @@
         #${uid} .status{color:#bfdbfe;min-height:16px}
         #${uid} input,#${uid} select{font:inherit;background:#172033;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:4px;max-width:150px}
         #${uid} .duration-controls{border-top:1px solid #334155;border-bottom:1px solid #334155;padding:8px 0;margin-bottom:8px}
+
+        #${uid} .panel{width:540px;padding:18px;border:1px solid #496294;border-radius:20px;background:linear-gradient(145deg,#111e34f7,#0b1222fc);box-shadow:0 20px 65px #0009,0 0 35px #3463cc20;backdrop-filter:blur(18px);scrollbar-width:thin;scrollbar-color:#405677 #101b2d}
+        #${uid} header{margin-bottom:16px} #${uid} header strong{font-size:23px;letter-spacing:1px}
+        #${uid} .panel-subtitle{display:block;color:#8da6ce;font-size:11px;margin-top:3px}
+        #${uid} button{border-radius:9px;background:#1b2a42;border-color:#3b5072;transition:background .16s,border-color .16s}
+        #${uid} [data-action="smart"]{background:linear-gradient(135deg,#249aff,#2856e8);border-color:#60b8ff;font-weight:700;box-shadow:0 4px 16px #1669e333}
+        #${uid} .route-toolbar{padding:4px 0 10px;position:relative}
+        #${uid} .source-list{gap:12px;align-items:start}
+        #${uid} .source-row{--accent:#64748b;position:relative;display:flex;flex-direction:column;gap:0;border:1px solid color-mix(in srgb,var(--accent) 45%,#24334b);border-radius:14px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 9%,#142036),#101a2b);overflow:hidden;box-shadow:0 6px 16px #0002}
+        #${uid} .source-row[data-state="pass"]{--accent:#39d798} #${uid} .source-row[data-state="fail"]{--accent:#ff637b}
+        #${uid} .source-row[data-state="limited"]{--accent:#b088ff} #${uid} .source-row[data-state="testing"]{--accent:#ffc65c}
+        #${uid} .source-row.is-playing{border-color:#36b2ff;box-shadow:0 0 0 1px #248aff55,0 0 20px #208dff25}
+        #${uid} .source-button,#${uid} .source-button[aria-pressed="true"]{display:block;flex:auto;width:100%;padding:15px 13px 10px 30px;border:0;border-radius:0;background:transparent;white-space:normal;min-height:210px}
+        #${uid} .source-button:hover{background:#ffffff06}
+        #${uid} .route-name{display:block;font-size:15px;font-weight:700;color:#f0f5ff;overflow-wrap:anywhere;margin-bottom:8px}
+        #${uid} .counter{display:inline-block;border-radius:20px;font-size:11px;padding:3px 9px;margin:0 4px 5px 0}
+        #${uid} .counter.limited{color:#eadbff;border-color:#b088ff;background:#512f79}
+        #${uid} .playing-badge{display:inline-block;font-size:10px;border:1px solid #439fff;background:#175cc3;border-radius:20px;padding:3px 7px;color:#fff}
+        #${uid} .route-score{display:block;font-size:32px;line-height:1.15;font-weight:750;letter-spacing:-1px;color:#dae9ff;font-variant-numeric:tabular-nums;margin:10px 0}
+        #${uid} .is-playing .route-score{color:#7dcdff}
+        #${uid} .route-score small{display:block;font-size:10px;font-weight:400;letter-spacing:1px;color:#8ea8c8;margin-top:4px}
+        #${uid} .route-result{display:block;color:var(--accent);font-size:11px;line-height:1.65;overflow-wrap:anywhere}
+        #${uid} .recent-rate{display:block;margin-top:9px;color:#afc6e7;font-size:11px}
+        #${uid} .route-health{border-top:1px solid #30415d;padding-top:9px;margin-top:9px;line-height:1.8}
+        #${uid} .route-details{border:0;border-top:1px solid #30415d;border-radius:0;background:transparent;color:#99b2d5;font-size:11px;padding:7px}
+        #${uid} .reorder{position:absolute;left:3px;top:13px;width:23px;padding:0;background:transparent;color:#7a94b9}
+        #${uid} .probe-summary{padding:10px;border-radius:10px;background:#15253d;line-height:2}
+        #${uid} .probe-summary:empty{display:none}
+        #${uid} .probe-summary .metric{font-size:18px;padding:1px 5px;font-variant-numeric:tabular-nums}
+        #${uid} .duration-controls{border-color:#30415d}
+        @media(max-width:560px){#${uid} .panel{width:350px;padding:12px} #${uid} .source-list{gap:8px} #${uid} .source-button{padding:12px 9px 10px 25px} #${uid} .route-name{font-size:13px} #${uid} .route-score{font-size:28px} #${uid} .toolbar button{white-space:normal}}
+        @media(max-width:330px){#${uid} .source-list{grid-template-columns:1fr}}
+        @media(prefers-reduced-motion:reduce){#${uid} button{transition:none}}
+
+        #${uid} .panel{width:620px;padding:18px}
+        #${uid} header{padding-bottom:12px;border-bottom:1px solid #2b3b54;margin-bottom:10px}
+        #${uid} .playback-controls{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+        #${uid} .playback-controls .toolbar{align-items:center;margin:0 0 12px;gap:8px}
+        #${uid} .mode-switch{border:1px solid #354863;border-radius:10px;background:#101c2e;padding:3px}
+        #${uid} .mode-switch button{border:0;background:transparent}
+        #${uid} .mode-switch button[aria-pressed="true"]{background:linear-gradient(135deg,#328fff,#2860dd);box-shadow:0 2px 8px #176aff35}
+        #${uid} [data-action="restore-player"]{border:0;background:transparent;color:#69b4ff;padding:4px}
+        #${uid} [data-action="auto"],#${uid} [data-action="smart-toggle"]{background:transparent;border:0;font-size:12px;display:inline-flex;gap:8px;align-items:center}
+        #${uid} [data-action="auto"]:after,#${uid} [data-action="smart-toggle"]:after{content:'';width:30px;height:18px;flex-shrink:0;border-radius:20px;background:radial-gradient(circle at 9px 9px,#dce7f5 0 6px,transparent 7px),#46546b}
+        #${uid} [data-action="auto"][aria-pressed="true"]:after,#${uid} [data-action="smart-toggle"][aria-pressed="true"]:after{background:radial-gradient(circle at 21px 9px,#fff 0 6px,transparent 7px),#2986ff}
+        #${uid} .duration-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:13px 15px;border:1px solid #35465f;border-radius:12px;background:linear-gradient(120deg,#1e2c40,#192638);margin:0 0 10px}
+        #${uid} .duration-field{order:0;display:flex;align-items:center;gap:15px;width:100%;padding-bottom:10px;border-bottom:1px solid #35465f}
+        #${uid} .target-duration{max-width:260px;flex:1;padding:7px 10px}
+        #${uid} .test-settings{order:1;width:100%;align-items:center;justify-content:space-between;margin:0;padding-bottom:10px;border-bottom:1px solid #35465f}
+        #${uid} .test-settings button{flex:0 1 auto;padding-left:0}
+        #${uid} .test-settings label{font-size:12px;display:flex;align-items:center;gap:6px}
+        #${uid} .target-note{order:2;flex:1;min-width:150px;margin:0;line-height:1.55}
+        #${uid} .test-actions{order:3;margin:0;max-width:100%}
+        #${uid} .test-actions button{padding:8px 15px;white-space:normal}
+        #${uid} .test-actions button:disabled{display:none}
+        #${uid} .probe-summary{margin:8px 0;padding:7px 12px;line-height:1.6;border:1px solid #2b3e59;border-radius:10px}
+        #${uid} .probe-summary .metric{font-size:14px}
+        #${uid} .route-toolbar{align-items:center;padding:4px 0;margin:10px 0}
+        #${uid} .routes-heading{margin-right:auto;font-size:15px}
+        #${uid} .route-toolbar button{flex:0 1 auto;background:transparent;border-color:transparent;color:#a6c9ee;font-size:12px;padding:4px 6px;white-space:normal}
+        #${uid} .source-list{gap:10px}
+        #${uid} .source-row{border-radius:12px;background:linear-gradient(125deg,#1e2d3d,#172231)}
+        #${uid} .source-button,#${uid} .source-button[aria-pressed="true"]{display:grid;grid-template-columns:70px minmax(0,1fr);align-items:center;gap:8px 12px;padding:12px 12px 8px;min-height:0}
+        #${uid} .card-heading{grid-column:1/-1;display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding-left:13px;min-width:0}
+        #${uid} .route-name{margin:0 auto 0 0;font-size:14px}
+        #${uid} .counter{margin:0;padding:2px 7px;font-size:10px}
+        #${uid} .playing-badge{padding:2px 5px;font-size:9px}
+        #${uid} .route-score{font-size:27px;margin:0;align-self:center;color:#7ceab0}
+        #${uid} .route-score small{font-size:9px;margin-top:3px}
+        #${uid} .route-result{border-left:1px solid #3a4960;padding-left:12px;font-size:11px;line-height:1.6;color:#ccdaed}
+        #${uid} .recent-rate{grid-column:1/-1;border-top:1px solid #354358;margin:0;padding:7px 50px 0 0;font-size:10px;min-height:25px}
+        #${uid} .route-health{grid-column:1/-1;margin:0;font-size:11px}
+        #${uid} .route-details{align-self:flex-end;padding:4px 9px;margin-top:-30px;margin-bottom:3px;min-height:27px;border:0;font-size:10px;z-index:1}
+        #${uid} .source-row:has(.route-health:not([hidden])) .route-details{margin-top:0;border-top:1px solid #354358;width:100%}
+        #${uid} .reorder{top:10px;left:3px;width:20px;font-size:12px}
+        @media(max-width:650px){#${uid} .panel{width:calc(100vw - 24px);padding:12px}#${uid} .playback-controls{gap:0}#${uid} .source-button,#${uid} .source-button[aria-pressed="true"]{grid-template-columns:55px minmax(0,1fr);gap:7px;padding:10px}#${uid} .route-score{font-size:24px}#${uid} .route-result{padding-left:7px}#${uid} .test-settings{gap:8px}#${uid} .target-note{font-size:10px}}
+        @media(max-width:380px){#${uid} .source-list{grid-template-columns:1fr}#${uid} .duration-controls{padding:10px}#${uid} .test-settings{justify-content:flex-start}#${uid} .target-duration{min-width:0;width:130px}}
+
+        #${uid} .brand{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+        #${uid} .brand-logo{display:inline-grid;place-items:center;width:28px;height:31px;font-size:27px;color:#5dd2ff;filter:drop-shadow(0 3px 4px #126bf866)}
+        #${uid} .brand .panel-subtitle{margin:0 0 0 3px;font-size:12px}
+        #${uid} header strong{font-size:22px;letter-spacing:0}
+        #${uid} [data-action="restore-player"] span,#${uid} [data-action="sort-success"] span{font-size:19px;vertical-align:middle;margin-right:3px}
+        #${uid} .duration-field{gap:12px;font-size:12px;flex-wrap:wrap}
+        #${uid} .info-icon{color:#95a7c0;font-size:13px;margin-left:4px;cursor:help}
+        #${uid} .duration-choice{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer;font-size:11px}
+        #${uid} .duration-choice input{appearance:none;width:14px;height:14px;margin:0;padding:0;border:1px solid #70849d;border-radius:50%;background:transparent;max-width:none}
+        #${uid} .duration-choice input:checked{border:2px solid #379bff;background:radial-gradient(circle,#379bff 0 3px,transparent 4px)}
+        #${uid} .duration-choice input:focus-visible{outline:2px solid #9bcfff;outline-offset:3px}
+        #${uid} .target-duration{max-width:135px;min-width:75px;padding:6px 8px}
+        #${uid} .target-duration[readonly]{opacity:.6}
+        #${uid} .duration-unit{color:#9cabbe;font-size:11px}
+        #${uid} .route-toolbar [data-action="sort-success"]{border-left:1px solid #33445c;border-radius:0;padding-left:12px}
+        #${uid} .counter{border-radius:20px;padding:3px 9px;box-shadow:inset 0 1px 2px #ffffff15;font-weight:500}
+        #${uid} .counter.pass{color:#c6ffdf;background:linear-gradient(180deg,#247b56,#174936);border-color:#3e9968}
+        #${uid} .counter.limited{color:#ecd8ff;background:linear-gradient(180deg,#794ca8,#482b6c);border-color:#9870c4}
+        #${uid} .playing-badge{background:linear-gradient(180deg,#338bed,#2058a5);border-color:#62a6ff;padding:3px 7px;border-radius:20px;color:#e7f3ff}
+        #${uid} .probe-summary{display:flex;flex-wrap:wrap;align-items:center;gap:0;background:linear-gradient(100deg,#1c2d43,#182639);border-radius:20px;font-size:11px}
+        #${uid} .summary-item{display:inline-flex;gap:5px;align-items:center;padding:0 11px;border-left:1px solid #40516a}
+        #${uid} .summary-item:first-child{border:0;padding-left:0}
+        #${uid} .summary-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#50d987;margin-right:4px}
+        #${uid} .summary-dot.running{background:#ffc45b}
+        #${uid} .probe-summary .metric{font-size:12px;font-weight:600;padding:0}
+        #${uid} .probe-summary .limited{color:#bf8eff}
+        @media(max-width:650px){#${uid} .brand .panel-subtitle{font-size:10px}#${uid} .brand{gap:6px}#${uid} .duration-field{gap:9px}#${uid} .summary-item{padding:2px 7px}}
+
+        /* Refined palette and hierarchy. State is carried by labels, not full-card borders. */
+        #${uid} .panel{background:linear-gradient(145deg,#111d30,#0e1727);border-color:#34455d;box-shadow:0 24px 70px #0008,0 1px 0 #ffffff08 inset}
+        #${uid} .ui-icon{width:15px;height:15px;flex-shrink:0;display:inline-block;vertical-align:-3px;pointer-events:none}
+        #${uid} button{transition:background .15s,border-color .15s,box-shadow .15s}
+        #${uid} header{border-bottom-color:#ffffff08;padding-bottom:15px}
+        #${uid} .brand-logo{width:27px;height:29px;filter:none;background:linear-gradient(145deg,#68ddff,#2877eb);border-radius:8px;color:#ecfaff;box-shadow:0 4px 12px #1590ff20}
+        #${uid} .brand-logo .ui-icon{width:23px;height:23px}
+        #${uid} header strong{font-size:21px;font-weight:750}
+        #${uid} .brand .panel-subtitle{color:#8399b5;letter-spacing:.3px}
+        #${uid} [data-action="close"]{display:grid;place-items:center;width:28px;min-height:28px;padding:0;background:transparent;border-color:transparent;color:#8ba1be}
+        #${uid} [data-action="close"]:hover{background:#ffffff0d;color:#fff}
+        #${uid} .mode-switch{border-color:#2e4059;background:#0e1828}
+        #${uid} .mode-switch button{font-size:12px;padding:6px 12px}
+        #${uid} .duration-controls{background:linear-gradient(120deg,#1c2a3e,#19263a);border-color:#ffffff0a;box-shadow:inset 0 1px 0 #ffffff04;padding:14px 16px;border-radius:14px}
+        #${uid} .duration-field,#${uid} .test-settings{border-bottom-color:#ffffff09;padding-bottom:12px}
+        #${uid} input,#${uid} select{border-color:#36475e;background:#152135;border-radius:7px}
+        #${uid} input:focus-visible,#${uid} select:focus-visible{outline:2px solid #74b7ff;outline-offset:2px}
+        #${uid} [data-action="smart-toggle"],#${uid} [data-action="smart-toggle"][aria-pressed="true"],#${uid} [data-action="auto"],#${uid} [data-action="auto"][aria-pressed="true"]{background:transparent;border-color:transparent;box-shadow:none;color:#c3d0e2}
+        #${uid} [data-action="smart-toggle"]:hover,#${uid} [data-action="auto"]:hover{background:#ffffff04}
+        #${uid} [data-action="restore-player"],#${uid} .route-toolbar button{display:inline-flex;gap:5px;align-items:center;justify-content:center;color:#91b5df}
+        #${uid} .route-toolbar button:hover,#${uid} [data-action="restore-player"]:hover{background:#ffffff06;color:#c6e2ff}
+        #${uid} .route-toolbar [data-action="sort-success"]{border-left-color:#ffffff0b}
+        #${uid} .routes-heading{font-size:14px;letter-spacing:.4px}
+        #${uid} .probe-summary{border-color:#ffffff07;background:#19283c;border-radius:10px;padding:8px 12px}
+        #${uid} .summary-item{border-color:#ffffff10}
+        #${uid} .source-row{border:1px solid #304159;border-radius:13px;background:linear-gradient(135deg,#1b293b,#182436);box-shadow:0 3px 10px #00000012;transition:border-color .15s,box-shadow .15s}
+        #${uid} .source-row:hover{border-color:#536b89;box-shadow:0 4px 14px #00000024}
+        #${uid} .source-row.is-playing{border-color:#459eff;box-shadow:0 0 0 1px #378cff22,0 5px 20px #1166da14;background:linear-gradient(135deg,#1b304a,#19263c)}
+        #${uid} .source-button,#${uid} .source-button[aria-pressed="true"]{grid-template-columns:64px minmax(0,1fr);gap:10px 12px;padding:13px 13px 8px}
+        #${uid} .route-name{font-size:14px;font-weight:650;letter-spacing:.15px}
+        #${uid} .card-heading{gap:6px}
+        #${uid} .counter,#${uid} .playing-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;line-height:1.35;box-shadow:none;padding:3px 7px;border-radius:20px}
+        #${uid} .counter .ui-icon,#${uid} .playing-badge .ui-icon{width:12px;height:12px;vertical-align:0}
+        #${uid} .counter.pass{background:#204f40;color:#a0e8c0;border-color:#347254}
+        #${uid} .counter.limited{background:#45305e;color:#d9b9ff;border-color:#74539a}
+        #${uid} .counter.fail{background:#512d39;color:#ffb5c4;border-color:#895062}
+        #${uid} .counter.testing{background:#4a402b;color:#f3cf8c;border-color:#7b6944}
+        #${uid} .counter.idle{background:#28354a;color:#adbed4;border-color:#43516a}
+        #${uid} .playing-badge{background:#214f87;color:#c9e5ff;border-color:#3b80c7}
+        #${uid} .route-score{font-size:26px;letter-spacing:-.7px;font-weight:700;color:#97abc6}
+        #${uid} .source-row[data-state="pass"] .route-score{color:#7eddb2}
+        #${uid} .source-row.is-playing .route-score{color:#89caff}
+        #${uid} .route-score small{font-size:9px;letter-spacing:.4px;color:#8197b3}
+        #${uid} .route-result{border-left-color:#ffffff0b;padding-left:12px;line-height:1.6;color:#bdcce0;font-size:11px}
+        #${uid} .route-result>span{display:block;text-wrap:pretty;overflow-wrap:anywhere}
+        #${uid} .result-secondary{color:#90a6c1;font-size:10px}
+        #${uid} .recent-rate{border-top-color:#ffffff09;color:#93a9c4;padding-top:8px}
+        #${uid} .route-details{display:inline-flex;align-items:center;gap:2px;color:#90a6c1;padding:4px 10px}
+        #${uid} .route-details .ui-icon{width:12px;height:12px}
+        #${uid} .route-details[aria-expanded="true"] .ui-icon{transform:rotate(180deg)}
+        #${uid} .route-details:hover{color:#cde6ff;background:#ffffff05}
+        #${uid} .route-health{border-top-color:#ffffff09;color:#a0b3cb}
+        #${uid} .reorder{color:#7389a5;display:grid;place-items:center;top:12px}
+        #${uid} .reorder .ui-icon{width:12px;height:15px}
+        @media(max-width:650px){#${uid} .source-button,#${uid} .source-button[aria-pressed="true"]{grid-template-columns:52px minmax(0,1fr);gap:8px;padding:11px 10px 8px}#${uid} .route-score{font-size:24px}#${uid} .route-result{padding-left:8px}}
+        @media(prefers-reduced-motion:reduce){#${uid} button,#${uid} .source-row{transition:none}}
+
+        /* Lightweight motion: no timers, external assets or pointer tracking. */
+        #${uid} .panel{background:radial-gradient(ellipse at 0 0,#213c5a36,transparent 50%),linear-gradient(145deg,#111d30,#0e1727)}
+        #${uid} .panel:not([hidden]){animation:${uid}-panel-in .2s ease-out}
+        #${uid} .brand-logo{box-shadow:0 3px 13px #188cfb30,inset 0 1px 0 #ffffff40}
+        #${uid} .mode-switch button{transition:background .2s,box-shadow .2s,color .2s}
+        #${uid} .mode-switch button[aria-pressed="true"]{box-shadow:0 3px 12px #177afa25,inset 0 1px 0 #ffffff25}
+        #${uid} [data-action="smart"]{position:relative;overflow:hidden;background:linear-gradient(120deg,#219dec,#3263ef);box-shadow:0 4px 14px #176ce52b,inset 0 1px 0 #ffffff25;transition:box-shadow .2s,filter .2s,transform .2s}
+        #${uid} [data-action="smart"]:before{content:'';position:absolute;inset:-40% auto -40% -65%;width:40%;background:linear-gradient(90deg,transparent,#ffffff25,transparent);transform:skewX(-20deg);pointer-events:none}
+        #${uid} [data-action="smart"]:hover:before{animation:${uid}-button-shine .7s ease-out}
+        #${uid} [data-action="smart"]:hover{box-shadow:0 5px 20px #237aff42;filter:brightness(1.08)}
+        #${uid} [data-action="smart"]:active{transform:scale(.98)}
+        #${uid} .source-row{transition:border-color .2s,box-shadow .2s,transform .2s;background:linear-gradient(125deg,#1c2c40,#182436)}
+        #${uid} .source-row:focus-within{border-color:#72b5ff;box-shadow:0 0 0 2px #4b9eff20}
+        #${uid} .source-row.is-playing{background:radial-gradient(ellipse at 100% 0,#327cd624,transparent 75%),linear-gradient(135deg,#1b304a,#19263c);box-shadow:0 0 0 1px #459eff25,0 5px 18px #1166da20}
+        #${uid} .playing-badge{box-shadow:0 0 8px #2887f026}
+        #${uid} .playing-badge .ui-icon{animation:${uid}-playing-glow 2.8s ease-in-out infinite}
+        #${uid} .source-row[data-state="testing"] .counter{animation:${uid}-testing-glow 2.2s ease-in-out infinite}
+        #${uid} .source-row[data-state="testing"] .counter .ui-icon{color:#ffdd9f}
+        #${uid} .summary-dot.running{animation:${uid}-playing-glow 2s ease-in-out infinite}
+        #${uid} .route-health:not([hidden]){animation:${uid}-details-in .2s ease-out}
+        #${uid} .route-details .ui-icon{transition:transform .18s ease}
+        #${uid} .counter{transition:filter .2s,box-shadow .2s}
+        #${uid} .source-row:hover .counter{filter:brightness(1.08)}
+        #${uid} .source-button:focus-visible{outline-offset:-3px;border-radius:12px}
+        #${uid} .reorder:hover{color:#c0deff;background:#ffffff08}
+        #${uid} .source-row.drop-target{outline:2px dashed #79bfff;outline-offset:-3px;background:#203751;box-shadow:0 0 18px #388cff20}
+        @media(hover:hover) and (pointer:fine){#${uid} .source-row:hover{transform:translateY(-2px);border-color:#577494;box-shadow:0 7px 18px #0003}#${uid} .source-row.is-playing:hover{border-color:#83c2ff;box-shadow:0 7px 22px #1679f52b}}
+        @keyframes ${uid}-panel-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes ${uid}-details-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes ${uid}-button-shine{from{left:-65%}to{left:140%}}
+        @keyframes ${uid}-playing-glow{0%,100%{opacity:1}50%{opacity:.55}}
+        @keyframes ${uid}-testing-glow{0%,100%{box-shadow:0 0 0 0 #e8b75600}50%{box-shadow:0 0 9px 1px #e8b75625}}
+        @media(prefers-reduced-motion:reduce){#${uid} .panel,#${uid} .panel *,#${uid} .panel *:before{animation:none!important;transition:none!important}#${uid} .source-row:hover,#${uid} [data-action="smart"]:active{transform:none}}
+
+        #${uid} .now-playing{display:flex;align-items:center;gap:9px;padding:13px 15px;border:1px solid #328ce5;border-radius:10px;margin:12px 0;background:linear-gradient(110deg,#193e62,#162b46);color:#deefff}
+        #${uid} .now-playing>span{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+        #${uid} .now-playing>.ui-icon{color:#61c5ff;width:23px;height:23px}
+        #${uid} .now-playing>strong{font-size:20px;white-space:nowrap;color:#b3ddff}
+        #${uid} .test-progress{margin:15px 0 12px}
+        #${uid} .phase-labels{font-size:12px;color:#acc7e7;margin-bottom:8px}
+        #${uid} progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;accent-color:#369bff;background:#213650}
+        #${uid} progress::-webkit-progress-bar{background:#213650;border-radius:8px}
+        #${uid} progress::-webkit-progress-value{background:linear-gradient(90deg,#2687ed,#64c3ff);border-radius:8px;transition:width .2s}
+        #${uid} .route-filters{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 8px}
+        #${uid} .route-filters button{display:inline-flex;align-items:center;gap:6px;border-radius:22px;padding:6px 10px;border:1px solid #354b65;background:#17263a;font-size:12px}
+        #${uid} .route-filters b{border-radius:12px;padding:1px 6px;background:#2d435f;font-variant-numeric:tabular-nums}
+        #${uid} .route-filters [data-filter="pass"] b{color:#9cecc0;background:#20553e}
+        #${uid} .route-filters [data-filter="limited"] b{color:#e2c8ff;background:#51367a}
+        #${uid} .route-filters [data-filter="fail"] b{color:#ffc2ce;background:#683949}
+        #${uid} .route-filters button[aria-pressed="true"]{border-color:#459eff;background:#174b80;color:#e7f4ff}
+        #${uid} .route-filters button:disabled{opacity:.5;cursor:default}
+        #${uid} .health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px}
+        #${uid} .health-cell{display:flex;flex-direction:column;gap:3px;min-width:0;border-bottom:1px solid #ffffff08;padding-bottom:8px}
+        #${uid} .health-cell>span{font-size:10px;color:#92a9c4}
+        #${uid} .health-cell>strong{font-size:13px;font-weight:600;color:#e1edfc;overflow-wrap:anywhere}
+        #${uid} .health-explanation{display:flex;flex-direction:column;gap:5px;font-size:11px;line-height:1.7;padding-top:10px}
+        #${uid} .health-explanation>strong{font-size:11px;color:#c7ddf6}
+        #${uid} .route-health{padding:12px;border:1px solid #324a64;border-radius:9px;background:#101e3055;margin:5px 0}
+        #${uid} .density-controls{display:flex;align-items:center;gap:5px;border-top:1px solid #ffffff09;padding-top:12px;margin-top:16px;color:#94abc6;font-size:11px}
+        #${uid} .density-controls>span{margin-right:7px}
+        #${uid} .density-controls button{font-size:11px;border-radius:20px;padding:4px 12px;background:transparent;border-color:#30455f}
+        #${uid} .density-controls button[aria-pressed="true"]{background:#194d82;border-color:#459eff;color:#d6edff}
+        #${uid}[data-density="comfortable"] .source-button{padding:17px 15px 12px;gap:13px}
+        #${uid}[data-density="comfortable"] .route-result{font-size:13px;line-height:1.8}
+        #${uid}[data-density="comfortable"] .result-secondary{font-size:12px}
+        #${uid}[data-density="comfortable"] .route-name{font-size:16px}
+        #${uid}[data-density="comfortable"] .recent-rate{font-size:12px}
+        @media(prefers-reduced-motion:reduce){#${uid} progress::-webkit-progress-value{transition:none}}
+        #${uid} .playback-controls [data-action="restore-player"]{white-space:nowrap;flex:none}
+        #${uid} .source-list{grid-auto-rows:1px;grid-auto-flow:row dense;gap:10px}
+        #${uid} .source-list.manage{grid-auto-rows:auto}
         .${hostClass}>:not(#${frameId}){visibility:hidden!important;pointer-events:none!important}
         #${frameId}{display:block!important;visibility:visible!important;opacity:1!important;position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:0!important;z-index:2147483000!important;background:#000!important;pointer-events:auto!important}
     `);
@@ -726,6 +948,13 @@
     const launcher = box.querySelector('.launcher');
     const list = box.querySelector('.source-list');
     const dragHandle = box.querySelector('.drag-handle');
+    function layoutCards() {
+        if (panel.hidden) return;
+        for (const row of list.querySelectorAll('.source-row')) {
+            row.style.gridRowEnd = managing ? '' : 'span ' + Math.max(1, Math.ceil((row.getBoundingClientRect().height + 10) / 11));
+        }
+    }
+    const cardResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(layoutCards) : null;
     function message(text) {
         clearTimeout(statusTimer);
         box.querySelector('.status').textContent = text;
@@ -746,23 +975,64 @@
         launcher.setAttribute('aria-expanded', String(open));
         if (open) { render(); positionPanel(); }
     }
+    function renderProgress() {
+        const area = box.querySelector('.test-progress');
+        area.hidden = !testProgress;
+        if (!testProgress) return;
+        const p = testProgress;
+        const ended = ['done','stopped','early','error'].includes(p.phase);
+        const stage = {initial:'初测中',retest:'复测中',done:'已完成',stopped:'已停止',early:'已提前选线',error:'未能启动'}[p.phase] || '准备中';
+        const retestText = p.retestTotal ? `${p.retestDone}/${p.retestTotal}` : p.phase === 'done' ? '无候选' : '待定';
+        area.querySelector('.phase-labels').textContent = `初测 ${p.initialDone}/${p.initialTotal}　 ·　 复测 ${retestText}　 ·　 ${stage}`;
+        const percent = p.phase === 'done' ? 100 : Math.min(99, (p.initialTotal ? p.initialDone / p.initialTotal : 0) * 70 + (p.retestTotal ? p.retestDone / p.retestTotal : 0) * 30);
+        const meter = area.querySelector('progress'); meter.value = percent;
+        meter.setAttribute('aria-valuetext', area.querySelector('.phase-labels').textContent);
+        area.classList.toggle('ended', ended);
+    }
     function render() {
+        cardResizeObserver?.disconnect();
         list.replaceChildren();
         list.classList.toggle('manage', managing);
-        for (const source of ranked(managing)) {
+        box.dataset.density = density;
+        box.querySelectorAll('[data-density]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.density === density)));
+        renderProgress();
+        const playingBar = box.querySelector('.now-playing');
+        const current = activePlayer && !activePlayer.testing && activePlayer.frame.isConnected ? activePlayer.source : null;
+        playingBar.hidden = !current;
+        playingBar.replaceChildren();
+        if (current) {
+            const label = document.createElement('span'); label.textContent = '正在播放 · ' + current.n;
+            const score = document.createElement('strong');
+            const match = probeStates.get(current.u) === 'match' && probeResults.get(current.u)?.match(/通过\s+(\d+(?:\.\d+)?)\s*分/);
+            score.textContent = match ? match[1] + ' 分' : '未实测';
+            playingBar.innerHTML = uiIcon('play'); playingBar.append(label, score);
+        }
+        const available = ranked(managing);
+        const matchesFilter = (source, filter) => filter === 'all' || (filter === 'pass' ? probeStates.get(source.u) === 'match' : filter === 'limited' ? ['limited','unknown'].includes(probeStates.get(source.u)) : probeStates.get(source.u) === 'failed');
+        const filters = box.querySelector('.route-filters'); filters.replaceChildren();
+        for (const [value, label] of [['all','全部'],['pass','通过'],['limited','无法检测'],['fail','未通过']]) {
+            const control = document.createElement('button'); control.type = 'button'; control.dataset.filter = value;
+            control.setAttribute('aria-pressed', String(routeFilter === value)); control.disabled = managing;
+            control.append(document.createTextNode(label + ' '));
+            const count = document.createElement('b'); count.textContent = available.filter(source => matchesFilter(source,value)).length;
+            control.appendChild(count); filters.appendChild(control);
+        }
+        for (const source of available.filter(source => managing || matchesFilter(source, routeFilter))) {
             const row = document.createElement('div');
             row.className = 'source-row';
             row.dataset.orderSource = source.u;
             const handle = document.createElement('button');
             handle.type = 'button'; handle.className = 'reorder'; handle.draggable = !smartRun; handle.disabled = !!smartRun;
-            handle.textContent = '↕'; handle.title = '拖动调整顺序；按上下方向键也可移动';
+            handle.innerHTML = uiIcon('grip'); handle.title = '拖动调整顺序；按上下方向键也可移动';
             handle.setAttribute('aria-label', '调整' + source.n + '顺序');
             row.appendChild(handle);
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'source-button';
             button.dataset.source = source.u;
-            button.textContent = source.n;
+            const name = document.createElement('span');
+            name.className = 'route-name'; name.textContent = source.n;
+            button.appendChild(name);
             const s = stat(source);
             button.title = `${source.n}\n${s.last ? '最近成功：' + new Date(s.last).toLocaleString() : '尚无实测成功记录'}\n累计成功次数：${s.count}\n${source.u}`;
             const probeStatus = probeResults.get(source.u);
@@ -771,34 +1041,73 @@
             button.setAttribute('aria-pressed', String(source.u === selected));
             const badge = document.createElement('span');
             const state = probeStates.get(source.u) || 'idle';
-            const statusClass = {match:'pass',failed:'fail',limited:'limited',testing:'testing',retesting:'testing'}[state] || 'idle';
+            const statusClass = {match:'pass',failed:'fail',limited:'limited',unknown:'limited',testing:'testing',retesting:'testing'}[state] || 'idle';
             badge.className = 'counter ' + statusClass;
             // The first label describes this run. Historical counters are
             // deliberately secondary so they cannot be mistaken for a live
             // playback result.
             const resultLabel = {match:'通过',failed:'未通过',limited:'无法检测',testing:'检测中',retesting:'复测中',unknown:'无法检测',cancelled:'已取消',queued:'待测',idle:'未测试'}[state];
-            badge.textContent = resultLabel;
-            if (probeStatus) badge.textContent += ' · ' + probeStatus;
-            badge.textContent += ' · 时长匹配 ' + s.full;
+            badge.innerHTML = uiIcon({pass:'check',limited:'help',fail:'close',testing:'clock'}[statusClass] || 'clock');
+            badge.appendChild(document.createTextNode(resultLabel));
+
             if (probeStatus) badge.title = '本轮：' + probeStatus;
-            button.appendChild(badge);
+            const cardHeading = document.createElement('span'); cardHeading.className = 'card-heading';
+            cardHeading.append(name, badge); button.appendChild(cardHeading);
+            row.dataset.state = statusClass;
+            const playing = activePlayer && !activePlayer.testing && activePlayer.source?.u === source.u;
+            row.classList.toggle('is-playing', !!playing);
+            if (playing) {
+                const now = document.createElement('span'); now.className = 'playing-badge';
+                now.innerHTML = uiIcon('play') + '正在播放'; cardHeading.appendChild(now);
+            }
+            const scoreMatch = statusClass === 'pass' && probeStatus?.match(/通过\s+(\d+(?:\.\d+)?)\s*分/);
+            const score = document.createElement('span'); score.className = 'route-score';
+            score.textContent = scoreMatch ? scoreMatch[1] : '—';
+            const scoreLabel = document.createElement('small'); scoreLabel.textContent = '流畅评分';
+            score.appendChild(scoreLabel); button.appendChild(score);
+            const result = document.createElement('span'); result.className = 'route-result';
+            const resultText = (probeStatus || '等待开始测试').replace(/((?:实播|复测)通过)\s+\d+(?:\.\d+)?\s*分/, '$1');
+            // Keep complete text accessible in details; each status phrase gets its own line.
+            result.title = resultText;
+            resultText.split(' · ').forEach((text, index) => {
+                const line = document.createElement('span'); line.className = index ? 'result-secondary' : 'result-primary';
+                line.textContent = text; result.appendChild(line);
+            });
+            button.appendChild(result);
             const h = health(source);
             const healthInfo = document.createElement('span');
             healthInfo.className = 'route-health';
             const recent = h.rate === null ? '暂无样本' : `${Math.round(h.rate*100)}%（${h.successes}/${h.attempts}）`;
-            healthInfo.textContent = `近期成功率 ${recent} · 无法检测 ${h.limited} 次 · 连续超时 ${h.timeoutStreak} 次`;
-            if (h.timeoutStreak > 0) healthInfo.classList.add('health-warning');
-            const last = document.createElement('span');
-            last.style.display='block';
-            last.textContent = '最近成功：' + (s.last ? new Date(s.last).toLocaleString() : '暂无');
-            healthInfo.appendChild(last);
-            const total = document.createElement('span');
-            total.style.display = 'block';
-            total.textContent = '累计成功次数：' + s.count;
-            healthInfo.appendChild(total);
+            healthInfo.hidden = !expandedRoutes.has(source.u);
+            const recentLine = document.createElement('span'); recentLine.className = 'recent-rate';
+            recentLine.textContent = `近期成功率 ${recent}`; button.appendChild(recentLine);
+            const healthGrid = document.createElement('span'); healthGrid.className = 'health-grid';
+            for (const [label,value] of [
+                ['最近成功',s.last ? new Date(s.last).toLocaleString() : '暂无'],
+                ['累计成功次数',String(s.count)],
+                ['近期成功率',recent],
+                ['连续超时',h.timeoutStreak + ' 次'],
+                ['时长匹配',s.full + ' 次'],
+                ['无法检测',h.limited + ' 次']
+            ]) {
+                const cell = document.createElement('span'); cell.className = 'health-cell';
+                const caption = document.createElement('span'); caption.textContent = label + ' ';
+                const valueNode = document.createElement('strong'); valueNode.textContent = value;
+                cell.append(caption,valueNode); healthGrid.appendChild(cell);
+            }
+            const explanation = document.createElement('span'); explanation.className = 'health-explanation';
+            const heading = document.createElement('strong'); heading.textContent = '检测说明';
+            const text = document.createElement('span'); text.textContent = probeStatus || '尚未测试；历史记录不代表本次播放结果。';
+            explanation.append(heading,text); healthInfo.append(healthGrid,explanation);
             healthInfo.title = '最近30天内最多20轮记录；成功率仅计算明确通过或未通过。无法检测、超时及旧版无法确认不计分母，也不直接降低健康分。复测覆盖本轮，取消不新增记录。';
             button.appendChild(healthInfo);
             row.appendChild(button);
+            const detail = document.createElement('button'); detail.type = 'button';
+            detail.className = 'route-details'; detail.dataset.detail = source.u;
+            detail.setAttribute('aria-expanded', String(expandedRoutes.has(source.u)));
+            detail.setAttribute('aria-label', source.n + '的检测与健康详情');
+            detail.innerHTML = (expandedRoutes.has(source.u) ? '收起详情' : '详情') + uiIcon('chevron');
+            row.appendChild(detail);
             if (managing) {
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
@@ -808,24 +1117,28 @@
                 row.appendChild(toggle);
             }
             list.appendChild(row);
+            cardResizeObserver?.observe(row);
         }
-        if (!list.children.length) list.textContent = '暂无显示的线路，可在管理中恢复。';
+        if (!list.children.length) list.textContent = routeFilter !== 'all' && !managing ? '本轮暂无此类线路，可切换“全部”查看。' : '暂无显示的线路，可在管理中恢复。';
         box.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
         const autoButton = box.querySelector('[data-action="auto"]');
-        autoButton.textContent = '自动播放：' + (autoOn ? '开' : '关');
+        autoButton.textContent = '自动播放';
         autoButton.setAttribute('aria-pressed', String(autoOn));
-        box.querySelector('[data-action="manage"]').textContent = managing ? '完成管理' : '管理线路';
+        box.querySelector('[data-action="manage"]').innerHTML = uiIcon(managing ? 'check' : 'settings') + (managing ? '完成管理' : '管理');
         box.querySelector('[data-action="restore-sources"]').hidden = !managing;
         box.querySelector('[data-action="reset-health"]').hidden = !managing;
         box.querySelector('[data-action="reset-health"]').disabled = !!smartRun;
         box.querySelector('[data-action="undo-health-reset"]').hidden = !managing || !read(healthBackupKey,null);
         box.querySelector('[data-action="undo-health-reset"]').disabled = !!smartRun;
-        box.querySelector('[data-action="smart-toggle"]').textContent = '按时长优选：' + (smartOn ? '开' : '关');
+        box.querySelector('[data-action="smart-toggle"]').textContent = '按时长优选';
+        box.querySelector('[data-action="smart-toggle"]').setAttribute('aria-pressed', String(smartOn));
         box.querySelector('[data-action="stop-smart"]').hidden = !smartRun;
         box.querySelector('[data-action="smart"]').disabled = !!smartRun;
         box.querySelector('.target-duration').disabled = !!smartRun;
+        box.querySelectorAll('.duration-choice input').forEach(input => { input.disabled = !!smartRun; });
         box.querySelector('.probe-concurrency').disabled = !!smartRun;
         box.querySelector('.probe-timeout').disabled = !!smartRun;
+        layoutCards();
         positionPanel();
     }
     function setPosition(left, top, persist = false) {
@@ -1020,6 +1333,24 @@
     box.addEventListener('click', event => {
         const button = event.target.closest('button');
         if (!button || !box.contains(button)) return;
+        if (button.dataset.filter) {
+            routeFilter = button.dataset.filter; render();
+            box.querySelector(`[data-filter="${routeFilter}"]`)?.focus(); return;
+        }
+        if (button.dataset.density) {
+            density = button.dataset.density; save(PREFIX + 'density', density); render();
+            box.querySelector(`[data-density="${density}"]`)?.focus(); return;
+        }
+        if (button.dataset.detail) {
+            const url = button.dataset.detail;
+            if (expandedRoutes.has(url)) expandedRoutes.delete(url); else expandedRoutes.add(url);
+            const row = button.closest('.source-row');
+            row.querySelector('.route-health').hidden = !expandedRoutes.has(url);
+            button.setAttribute('aria-expanded', String(expandedRoutes.has(url)));
+            button.innerHTML = (expandedRoutes.has(url) ? '收起详情' : '详情') + uiIcon('chevron');
+            layoutCards();
+            return;
+        }
         if (button.dataset.source) {
             const source = sources.find(s => s.u === button.dataset.source);
             if (!source || isHidden(source)) return;
@@ -1118,7 +1449,7 @@
         if (!box.isConnected) document.body.appendChild(box);
         if (location.href !== lastUrl) {
             lastUrl = location.href;
-            stopSmartSelection(); probeResults.clear(); probeStates.clear(); clearTargetDisplay();
+            stopSmartSelection(); probeResults.clear(); probeStates.clear(); testProgress = null; routeFilter = 'all'; clearTargetDisplay();
             stopPending(); restorePlayer(); runAuto();
         } else if (activePlayer && !activePlayer.testing && !activePlayer.frame.isConnected) {
             const source = activePlayer.source;
@@ -1217,11 +1548,23 @@
         return location.href;
     }
     function targetKey() { return PREFIX + 'duration-target:' + videoPageUrl(); }
+    function syncDurationMode(manual) {
+        box.querySelectorAll('.duration-choice input').forEach(input => { input.checked = input.value === (manual ? 'manual' : 'auto'); });
+        targetInput.readOnly = !manual;
+    }
+    box.querySelectorAll('.duration-choice input').forEach(input => input.addEventListener('change', () => {
+        if (smartRun || !input.checked) return;
+        const manual = input.value === 'manual';
+        syncDurationMode(manual);
+        if (manual) { targetInput.focus(); targetInput.select(); }
+        else { save(targetKey(), null); clearTargetDisplay(); }
+    }));
     targetInput.addEventListener('change', () => {
         const seconds = DurationTools.input(targetInput.value);
         if (targetInput.value.trim() && (!seconds || seconds > 86400)) {
             message('时长支持 16:18、16分18秒、16 min 18 sec、1小时30分钟。'); return;
         }
+        syncDurationMode(!!seconds);
         save(targetKey(), seconds || null);
         targetRequest = null;
         if (seconds) { targetInput.value = DurationTools.format(seconds); targetNote.textContent = '已使用你填写的正片时长。'; }
@@ -1297,13 +1640,14 @@
     }
     function clearTargetDisplay() {
         targetRequest = null;
+        syncDurationMode(!!read(targetKey(), null));
         targetInput.value = '';
         const key = videoPageUrl();
         targetNote.textContent = '正在读取正片时长…';
         box.querySelector('.probe-summary').textContent = '';
         void resolveTarget().then(target => {
             if (!box.isConnected) return;
-            if (videoPageUrl() !== key || targetInput.value) return;
+            if (videoPageUrl() !== key || targetInput.value || (!targetInput.readOnly && !read(targetKey(), null))) return;
             if (target) {
                 targetInput.value = DurationTools.format(target.seconds);
                 targetNote.textContent = `${target.origin} · 可手动修正。纯数字表示分钟。`;
@@ -1446,6 +1790,7 @@
         if (!smartRun) return;
         const run = smartRun;
         run.cancelled = true;
+        if (testProgress) testProgress.phase = 'stopped';
         smartRun = null;
         clearInterval(run.holdTimer);
         for (const result of run.matches || []) sendControl(result.frame, result.token, 'abort');
@@ -1491,6 +1836,7 @@
         refreshLateTarget(run);
         const best = run.matches.find(r=>r.source.u===source.u && r.frame.isConnected && probeStates.get(source.u)==='match');
         if (!best) return false;
+        if (testProgress) testProgress.phase = 'early';
         run.cancelled=true; smartRun=null; clearInterval(run.holdTimer);
         for (const cancel of [...run.cancellers]) cancel();
         for (const other of run.matches) if(other!==best) sendControl(other.frame,other.token,'abort');
@@ -1534,6 +1880,8 @@
         const run = {url:location.href, key:videoPageUrl(), healthId:randomToken(), cancellers:new Set(), cancelled:false, matches:[], holdTimer:null};
         run.identity = IdentityTools.read(document);
         smartRun = run; probeResults.clear(); probeStates.clear();
+        routeFilter = 'all';
+        testProgress = {phase:'initial',initialDone:0,initialTotal:ranked().length,retestDone:0,retestTotal:0};
         for (const source of ranked()) probeStates.set(source.u,'queued');
         render(); openPanel(true);
         if(!originalMediaGuard) originalMediaGuard=guardOriginalMedia();
@@ -1550,11 +1898,11 @@
         let candidates = ranked();
         // Respect the manual/health order; a historical winner must not jump
         // ahead of healthier candidates in a batched run.
-        if (!candidates.length) { smartRun = null; restorePlayer(); render(); message('没有可测试的线路，请先恢复至少一条。'); return; }
+        if (!candidates.length) { testProgress.phase = 'error'; smartRun = null; restorePlayer(); render(); message('没有可测试的线路，请先恢复至少一条。'); return; }
         mode = 'embedded'; save(SITE + 'mode', mode);
         const player = await play(candidates[0], false, true);
         if (smartRun !== run || run.cancelled) return;
-        if (!player) { smartRun = null; restorePlayer(); render(); message('未找到原播放器，无法启动内嵌选线。'); return; }
+        if (!player) { testProgress.phase = 'error'; smartRun = null; restorePlayer(); render(); message('未找到原播放器，无法启动内嵌选线。'); return; }
         const limit = concurrencySelect.value === 'all' ? candidates.length : Math.max(1, Math.min(6, Number(concurrencySelect.value) || 3));
         run.holdTimer = setInterval(() => {
             refreshLateTarget(run);
@@ -1563,8 +1911,13 @@
         let next = 0;
         let completed = 0;
         const summary = () => {
+            if (testProgress) { testProgress.initialDone = completed; renderProgress(); }
             const passed = candidates.filter(source=>probeStates.get(source.u)==='match').length;
-            box.querySelector('.probe-summary').innerHTML = `已测 <span class="metric tested">${completed}/${candidates.length}</span> · 通过 <span class="metric passed">${passed}</span> 条${run.target ? '' : ' · 完整时长未验证'} · 同时 <span class="metric parallel">${run.phase === 'retest' ? 1 : limit}</span> 条 · 加载 <span class="metric timeout">最多${timeoutSelect.value}秒</span>，再实播观察`;
+            const limited = candidates.filter(source => ['limited','unknown'].includes(probeStates.get(source.u))).length;
+            const finished = smartRun !== run;
+            const summaryBox = box.querySelector('.probe-summary');
+            summaryBox.innerHTML = `<span class="summary-item"><i class="summary-dot ${finished ? '' : 'running'}"></i>${finished ? '已完成' : run.phase === 'retest' ? '复测中' : '测试中'}</span><span class="summary-item">已测 <span class="metric tested">${completed}/${candidates.length}</span></span><span class="summary-item">通过 <span class="metric passed">${passed}</span></span><span class="summary-item limited">无法检测 <span class="metric limited">${limited}</span></span>`;
+            summaryBox.title = `${run.target ? '已读取正片时长' : '完整时长未验证'} · 同时 ${run.phase === 'retest' ? 1 : limit} 条 · 加载最多${timeoutSelect.value}秒，再实播观察`;
         };
         async function worker() {
             while (smartRun === run && !run.cancelled && next < candidates.length) {
@@ -1596,8 +1949,10 @@
         await Promise.all(Array.from({length:Math.min(limit, candidates.length)}, worker));
         if (smartRun !== run || run.cancelled) return;
         run.phase = 'retest';
+        testProgress.phase = 'retest';
         refreshLateTarget(run);
         const finalists = [...run.matches].filter(r=>r.frame.isConnected).sort((a,b)=>b.score-a.score);
+        testProgress.retestTotal = Math.min(3, finalists.length);
         const verified = [];
         let attempted=0;
         for (const candidate of finalists) {
@@ -1606,6 +1961,7 @@
             if (attempted >= 3 && verified.some(r=>r.frame.isConnected)) break;
             if (!candidate.frame.isConnected) continue;
             attempted++;
+            testProgress.retestTotal = Math.max(testProgress.retestTotal, attempted);
             run.retesting = candidate;
             probeStates.set(candidate.source.u,'retesting');
             probeResults.set(candidate.source.u,'单路重新计时，独立复测');
@@ -1618,6 +1974,7 @@
             if (smartRun !== run || run.cancelled) return;
             Object.assign(candidate,result);
             run.retesting = null;
+            testProgress.retestDone = attempted;
             if(result.type === 'match') {
                 verified.push(candidate); sendControl(candidate.frame,candidate.token,'hold');
             } else { candidate.frame.remove(); ownedFrames.delete(candidate.frame); }
@@ -1625,6 +1982,8 @@
         }
         if (smartRun === run) {
             clearInterval(run.holdTimer);
+            testProgress.phase = 'done';
+            testProgress.retestTotal = testProgress.retestDone;
             smartRun = null;
             const best = verified.filter(result => result.frame.isConnected).sort((a, b) => b.score - a.score || a.metrics.startup - b.metrics.startup)[0];
             if (best && activePlayer) {
@@ -1640,7 +1999,7 @@
                 summary(); render();
                 message(`已选 ${best.source.n}：${DurationTools.format(best.duration)}，本轮 ${best.score.toFixed(1)} 分。${run.target ? '' : '完整时长未验证，可能包含试看；可填写正片时长后重测。'}若无声请点播放器取消静音。`);
             } else {
-                restorePlayer(); render();
+                restorePlayer(); summary(); render();
                 message(`本轮没有确认到${target ? '时长匹配且' : ''}已播放的线路。可查看检测结果；未知不等于永久失效。`);
             }
         }
