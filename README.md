@@ -10,7 +10,7 @@
 
 https://github.com/yk1234f/vip-/blob/main/card-design-v3.8.2.png
 
-![线路测试中](https://raw.githubusercontent.com/yk1234f/vip-/main/card-design-v3.8.2.png)
+![线路测试中](https://github.com/yk1234f/vip-/blob/main/card-design-v3.8.2.png)
 
 ![线路测试中](https://raw.githubusercontent.com/yk1234f/vip-/main/线路测试中.png)
 
